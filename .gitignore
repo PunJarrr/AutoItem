@@ -26,3 +26,6 @@ CLAUDE.local.md
 .claude/settings.local.json
 .claude/.last-green-build
 
+
+# tools/bot (Mineflayer test client)
+tools/bot/node_modules/

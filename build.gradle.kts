@@ -1,4 +1,5 @@
 import xyz.jpenilla.runpaper.task.RunServer
+import xyz.jpenilla.runtask.service.DownloadsAPIService
 
 plugins {
     id("java-library")
@@ -55,14 +56,22 @@ tasks {
 //   ./gradlew runServer1_21_11   -> Paper 1.21.11 (newest 1.21.x, Java 21)
 //   ./gradlew runServer1_21_1    -> Paper 1.21.1  (oldest supported, Java 21)
 //   ./gradlew runFolia           -> Folia 26.2    (Java 25)
+//   ./gradlew runFolia1_21_11    -> Folia 1.21.11 (Java 21; the newest Folia the tools/bot client can join)
 // ---------------------------------------------------------------------------
-data class TestServer(val taskName: String, val minecraftVersion: String, val javaVersion: Int, val dir: String)
+data class TestServer(
+    val taskName: String,
+    val minecraftVersion: String,
+    val javaVersion: Int,
+    val dir: String,
+    val folia: Boolean = false,
+)
 
 val testServers = listOf(
     TestServer("runServer", "26.2", 25, "26.2"),
     TestServer("runServer1_21_11", "1.21.11", 21, "1.21.11"),
     TestServer("runServer1_21_1", "1.21.1", 21, "1.21.1"),
-    TestServer("runFolia", "26.2", 25, "folia-26.2"),
+    TestServer("runFolia", "26.2", 25, "folia-26.2", folia = true),
+    TestServer("runFolia1_21_11", "1.21.11", 21, "folia-1.21.11", folia = true),
 )
 
 val pluginJar = tasks.jar.flatMap { it.archiveFile }
@@ -90,7 +99,12 @@ testServers.forEach { server ->
     } else {
         tasks.register<RunServer>(server.taskName) {
             group = "run paper"
-            description = "Runs a Paper ${server.minecraftVersion} test server with the plugin."
+            val software = if (server.folia) "Folia" else "Paper"
+            description = "Runs a $software ${server.minecraftVersion} test server with the plugin."
+            if (server.folia) {
+                displayName.set("Folia")
+                downloadsApiService.set(DownloadsAPIService.folia(project))
+            }
             configureServer()
             pluginJars(pluginJar)
         }
