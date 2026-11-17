@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh '/Users/pun/IdeaProjects/AutoItem/.codex/hooks/verify-build.sh'",
+            "timeout": 600
+          }
+        ]
+      }
+    ]
+  }
+}
