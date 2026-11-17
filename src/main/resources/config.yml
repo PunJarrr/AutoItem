@@ -1,0 +1,79 @@
+# AutoItem configuration
+# After editing, run /autoitem reload
+#
+# Invalid values are reported in the console and replaced by their default.
+# Missing keys use their default silently. This file is never rewritten by the plugin.
+
+# Version of this file's layout. Don't change it.
+config-version: 1
+
+# Master switch. false = AutoItem does nothing.
+enabled: true
+
+# Which actions refill the slot when they use its last item.
+triggers:
+  block-place: true      # placing blocks
+  consume: true          # eating and drinking
+  buckets: true          # emptying and filling buckets
+  throwables: true       # snowballs, eggs, ender pearls, splash potions, XP bottles, wind charges
+  right-click: true      # spawn eggs, boats, bone meal, fireworks, item frames, feeding animals...
+  bows: true             # last arrow or rocket in the hand opposite a bow or crossbow
+  tool-break: false      # replace a broken tool with the same tool
+
+sources:
+  # Also take refills from the hotbar (the main inventory is always used first).
+  hotbar: true
+
+# Items that are never refilled. Material names or item tags, e.g.
+# [TOTEM_OF_UNDYING, "#minecraft:beds"]
+ignored-items: []
+
+# What an item leaves in the slot when it is used up. NONE = nothing.
+# Filling works the other way round: using the last empty bucket allows any
+# item that maps to BUCKET here. Unknown item names are skipped with a warning.
+remainders:
+  MUSHROOM_STEW: BOWL
+  RABBIT_STEW: BOWL
+  BEETROOT_SOUP: BOWL
+  SUSPICIOUS_STEW: BOWL
+  POTION: GLASS_BOTTLE
+  HONEY_BOTTLE: GLASS_BOTTLE
+  WATER_BUCKET: BUCKET
+  LAVA_BUCKET: BUCKET
+  MILK_BUCKET: BUCKET
+  POWDER_SNOW_BUCKET: BUCKET
+  COD_BUCKET: BUCKET
+  SALMON_BUCKET: BUCKET
+  PUFFERFISH_BUCKET: BUCKET
+  TROPICAL_FISH_BUCKET: BUCKET
+  AXOLOTL_BUCKET: BUCKET
+  TADPOLE_BUCKET: BUCKET
+  OMINOUS_BOTTLE: NONE
+
+# Worlds (exact names) where AutoItem does nothing.
+disabled-worlds: []
+
+feedback:
+  sound:
+    enabled: true
+    # Any sound key; unknown keys play nothing.
+    key: "minecraft:entity.item.pickup"
+    volume: 0.3
+    pitch: 1.4
+  # Show messages.refilled on the action bar after a refill.
+  action-bar: false
+
+# Every message the plugin sends. MiniMessage format; <prefix> inserts the prefix.
+messages:
+  prefix: "<gray>[<gold>AutoItem</gold>]</gray> "
+  # <item> = the item's name
+  refilled: "<gray>Refilled <white><item></white></gray>"
+  toggled-on: "<prefix><green>Auto refill enabled.</green>"
+  toggled-off: "<prefix><yellow>Auto refill disabled.</yellow>"
+  reloaded: "<prefix><green>Config reloaded.</green>"
+  # <count> = number of warnings
+  reloaded-with-warnings: "<prefix><yellow>Config reloaded with <count> warning(s). See console.</yellow>"
+  reload-failed: "<prefix><red>Config has errors, kept the previous one. See console.</red>"
+  no-permission: "<prefix><red>You don't have permission.</red>"
+  player-only: "<prefix><red>Only players can use this.</red>"
+  usage: "<prefix><gray>/autoitem <toggle|reload></gray>"

@@ -1,0 +1,20 @@
+name: AutoItem
+description: '${description}'
+version: '${version}'
+
+main: dev.punjarrr.autoItem.AutoItem
+api-version: '1.21'
+folia-supported: true
+
+authors: [ PunJarrr ]
+
+permissions:
+  autoitem.use:
+    description: Your hand is refilled when you use up its last item.
+    default: true
+  autoitem.toggle:
+    description: Turn auto refill on or off for yourself.
+    default: true
+  autoitem.reload:
+    description: Reload config.yml.
+    default: op
