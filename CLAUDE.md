@@ -21,15 +21,15 @@ The developer is Pun (author `PunJarrr`). He runs a Paper server on Proxmox and 
   - `./gradlew runServer26_3` / `runFolia26_3` → Paper / Folia 26.3 (newest; the bot can't join it yet)
   - `runServer26_1`, `runFolia26_1`, `runFolia1_21_11` → the other servers the bot plays on
   - These are interactive servers. For automated boot checks use the `/test-server` skill, and never leave a server running.
-- `tools/bot/run.sh <task> <run dir> <version>` — the SPEC §8 G/X tests with a Mineflayer bot as the player, e.g. `tools/bot/run.sh runServer1_21_1 run/1.21.1 1.21.1`. Works on Paper 1.21.1, 1.21.11 and 26.1.2 (`runServer26_1`, version `26.1`) and Folia 1.21.11 and 26.1.2 (`runFolia1_21_11`, `runFolia26_1`); the bot can't join 26.2. It switches that run dir to offline mode and ops the bot. First time: `cd tools/bot && npm install --ignore-scripts`. Results go to `build/bot/<run dir>.jsonl`. Needs the Mac awake and on power: a sleeping machine freezes the server mid-test.
+- `tools/bot/run.sh <task> <run dir> <version>` — the SPEC §8 G/X tests with a Mineflayer bot as the player, e.g. `tools/bot/run.sh runServer1_21_1 run/1.21.1 1.21.1`. Works on Paper 1.21 (`runServer1_21`), 1.21.1, 1.21.11 and 26.1.2 (`runServer26_1`, version `26.1`) and Folia 1.21.11 and 26.1.2 (`runFolia1_21_11`, `runFolia26_1`); the bot can't join 26.2. It switches that run dir to offline mode and ops the bot. First time: `cd tools/bot && npm install --ignore-scripts`. Results go to `build/bot/<run dir>.jsonl`. Needs the Mac awake and on power: a sleeping machine freezes the server mid-test.
 - If `./gradlew` gives "permission denied", run `chmod +x gradlew`. If it can't find Java, set `JAVA_HOME` to a JDK 21.
 
 ## Stack and compatibility
 
 - Java 21, Gradle Kotlin DSL, `compileOnly paper-api 1.21`. Adventure and MiniMessage come with Paper, so shade nothing.
 - Supports Minecraft 1.21 through 26.x on Paper and its forks, and **Folia** from 1.21.4 (`folia-supported: true`). Spigot/CraftBukkit is the next milestone (SPEC §7.5), not supported yet.
-- A compile error against the 1.21 API means that API doesn't exist on our oldest version. **Never bump paper-api to make something compile**; find a 1.21.1-safe way.
-- Tests run against the paper-api version MockBukkit is built for (1.21.11, see `build.gradle.kts`). Something that compiles in tests but not in `main` doesn't exist on 1.21.1.
+- A compile error against the 1.21 API means that API doesn't exist on our oldest version. **Never bump paper-api to make something compile**; find a 1.21-safe way.
+- Tests run against the paper-api version MockBukkit is built for (1.21.11, see `build.gradle.kts`). Something that compiles in tests but not in `main` doesn't exist on 1.21.
 - Javadocs: https://jd.papermc.io/paper/1.21.11/ (1.21 is a subset of this; the compiler has the final say).
 - `plugin.yml` stays on `api-version: '1.21'`.
 - Config strings go through `Material.matchMaterial()` and item tags. Never `valueOf` or `switch` on Bukkit enums or registry types. No data component API (not in 1.21).
