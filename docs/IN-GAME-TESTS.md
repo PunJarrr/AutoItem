@@ -49,7 +49,7 @@ Set `tool-break: true` in `run/26.2/plugins/AutoItem/config.yml`, then `/autoite
 - [ ] **X11** Only if the server uses Multiverse-Inventories or PerWorldInventory: use the last item and go through a portal at once. Expected: nothing moves in either world's inventory.
 - [ ] **Folia 26.2** `./gradlew runFolia`: a quick pass of G1, G5 (water bucket) and G8 (bow) to see it works on 26.x Folia too.
 
-## 5. Only if the milestone 4 audit fixes are applied
+## 5. Milestone 4 audit fixes
 
 - [ ] Right-click the air with the last diamond, then middle-click (pick block) another item: no refill.
 - [ ] Last emerald in hand, right-click a villager and pick an emerald trade at once: no refill.
