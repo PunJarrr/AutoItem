@@ -72,14 +72,17 @@ function predictOneUsed (hand) {
   }
 }
 
-/** Right-click the top face of the block at `below` with a hand (0 = main, 1 = offhand). */
-function placeOn (below, hand = 0) {
+/**
+ * Right-click the top face of the block at `below` with a hand (0 = main, 1 = offhand). `top` is the height of
+ * that face inside the block: 26.x rejects clicks outside the block's real shape (farmland is 15/16 tall).
+ */
+function placeOn (below, hand = 0, top = 1.0) {
   const packet = {
     hand,
     location: below,
     direction: 1, // +Y face
     cursorX: 0.5,
-    cursorY: 1.0,
+    cursorY: top,
     cursorZ: 0.5,
     insideBlock: false,
     worldBorderHit: false, // 1.21.3+; ignored by older protocols, as in Mineflayer's own placeBlock
@@ -90,6 +93,23 @@ function placeOn (below, hand = 0) {
 }
 
 /** Right-click with an item, looking in a direction (Minecraft yaw/pitch in degrees; pitch 90 = down). */
+/** Right-click a side of a block: direction 2 north (-z), 3 south (+z), 4 west (-x), 5 east (+x). */
+function useOnFace (block, direction, hand = 0) {
+  const cursor = { 2: [0.5, 0.5, 0], 3: [0.5, 0.5, 1], 4: [0, 0.5, 0.5], 5: [1, 0.5, 0.5] }[direction]
+  bot._client.write('block_place', {
+    hand,
+    location: block,
+    direction,
+    cursorX: cursor[0],
+    cursorY: cursor[1],
+    cursorZ: cursor[2],
+    insideBlock: false,
+    worldBorderHit: false,
+    sequence: sequence++
+  })
+  predictOneUsed(hand)
+}
+
 function useItem (hand = 0, yaw = 0, pitch = 90) {
   bot._client.write('use_item', { hand, sequence: sequence++, rotation: { x: yaw, y: pitch } })
 }
@@ -111,15 +131,16 @@ async function holdUse (ms, hand = 0) {
   dig(5) // release
 }
 
-/** Right-click the nearest entity of a type with the main hand. */
-async function useOnEntity (type) {
+/** Right-click the nearest entity of a type with the main hand (at a point on it, if given). */
+async function useOnEntity (type, at = null) {
   let entity = null
   for (let i = 0; i < 30 && !entity; i++) {
     entity = bot.nearestEntity((e) => e.name === type)
     if (!entity) await sleep(100)
   }
   if (!entity) throw new Error(`no ${type} near the bot`)
-  bot.activateEntity(entity)
+  if (at) bot.activateEntityAt(entity, entity.position.offset(at.x, at.y, at.z))
+  else bot.activateEntity(entity)
 }
 
 function dig (status) {
@@ -381,8 +402,14 @@ const tests = [
     id: 'G2b',
     name: 'last wheat seeds refill with seeds (placed block is wheat)',
     slots: { 0: 'wheat_seeds 1', 9: 'wheat_seeds 7' },
-    setup: async () => { cmd('/setblock 2 99 0 farmland'); await sleep(300) },
-    act: async () => { placeOn(P(2, 0)); await sleep(800) },
+    setup: async () => {
+      cmd('/setblock 2 99 0 farmland')
+      // Wheat can only be planted with light 8+ or open sky; the test platform may be underground in a world
+      // with another seed (it was on the 26.1.2 server). An invisible light block above fixes that.
+      cmd('/setblock 2 101 0 minecraft:light[level=15]')
+      await sleep(300)
+    },
+    act: async () => { placeOn(P(2, 0), 0, 15 / 16); await sleep(800) },
     expect: { 0: ['wheat_seeds', 7], 9: null },
     delta: { wheat_seeds: -1 }
   },
@@ -840,6 +867,184 @@ const tests = [
     expect: { 0: ['cobblestone', 64], 9: null },
     delta: { cobblestone: -1 }
   },
+  // ---- more checklist items the bot can do ----
+  {
+    id: 'G7-minecart',
+    name: 'last minecart placed on a rail: refilled',
+    slots: { 0: 'minecart 1', 9: 'minecart 1' },
+    setup: async () => { cmd('/setblock 2 100 0 minecraft:rail'); await sleep(300) },
+    act: async () => { placeOn(new Vec3(2, 100, 0), 0, 2 / 16); await sleep(800) },
+    expect: { 0: ['minecart', 1], 9: null },
+    delta: { minecart: -1 }
+  },
+  {
+    id: 'G7-painting',
+    name: 'last painting hung on a wall: refilled',
+    slots: { 0: 'painting 1', 9: 'painting 3' },
+    setup: async () => { cmd('/setblock 2 100 0 minecraft:stone'); await sleep(300) },
+    act: async () => { useOnFace(new Vec3(2, 100, 0), 4); await sleep(800) },
+    expect: { 0: ['painting', 3], 9: null },
+    delta: { painting: -1 }
+  },
+  {
+    id: 'G7-armor-stand',
+    name: 'last armor stand placed: refilled',
+    slots: { 0: 'armor_stand 1', 9: 'armor_stand 2' },
+    act: async () => { placeOn(P(2, 0)); await sleep(800) },
+    expect: { 0: ['armor_stand', 2], 9: null },
+    delta: { armor_stand: -1 }
+  },
+  {
+    id: 'G7-lead',
+    name: 'last lead tied to a cow: refilled',
+    slots: { 0: 'lead 1', 9: 'lead 4' },
+    setup: async () => { cmd('/summon cow 2 100 0 {NoAI:1b}'); await sleep(800) },
+    act: async () => { await useOnEntity('cow'); await sleep(800) },
+    expect: { 0: ['lead', 4], 9: null },
+    delta: { lead: -1 }
+  },
+  {
+    id: 'G7-name-tag',
+    name: 'last (renamed) name tag used on a cow: refilled',
+    needsComponents: true,
+    slots: { 0: `name_tag[${named('Bessie')}] 1`, 9: `name_tag[${named('Bessie')}] 2` },
+    setup: async () => { cmd('/summon cow 2 100 0 {NoAI:1b}'); await sleep(800) },
+    act: async () => { await useOnEntity('cow'); await sleep(800) },
+    expect: { 0: ['name_tag', 2], 9: null },
+    delta: { name_tag: -1 }
+  },
+  {
+    id: 'G7-cauldron',
+    name: 'last water bucket poured into a cauldron: refilled, empty bucket takes the source slot',
+    slots: { 0: 'water_bucket 1', 9: 'water_bucket 1' },
+    setup: async () => { cmd('/setblock 2 100 0 minecraft:cauldron'); await sleep(300) },
+    act: async () => { placeOn(new Vec3(2, 100, 0)); await sleep(800) },
+    expect: { 0: ['water_bucket', 1], 9: ['bucket', 1] },
+    delta: { water_bucket: -1, bucket: 1 }
+  },
+  {
+    id: 'G7-bottle',
+    name: 'last glass bottle filled with water: another bottle, the water bottle takes the source slot',
+    slots: { 0: 'glass_bottle 1', 9: 'glass_bottle 3' },
+    setup: async () => { cmd('/setblock 2 99 0 water'); await sleep(300) },
+    act: async () => { await useItemAt(new Vec3(2.5, 99.8, 0.5)); await sleep(800) },
+    expect: { 0: ['glass_bottle', 3], 9: ['potion', 1] },
+    delta: { glass_bottle: -1, potion: 1 }
+  },
+  {
+    id: 'G7-mooshroom',
+    name: 'last bowl used on a mooshroom: another bowl, the stew takes the source slot',
+    slots: { 0: 'bowl 1', 9: 'bowl 2' },
+    setup: async () => { cmd('/summon mooshroom 2 100 0 {NoAI:1b}'); await sleep(800) },
+    act: async () => { await useOnEntity('mooshroom'); await sleep(800) },
+    expect: { 0: ['bowl', 2], 9: ['mushroom_stew', 1] },
+    delta: { bowl: -1, mushroom_stew: 1 }
+  },
+  {
+    id: 'G9-flint',
+    name: 'tool-break: flint and steel that breaks lighting a fire is replaced',
+    needsComponents: true,
+    config: [['tool-break: false', 'tool-break: true']],
+    slots: { 0: 'flint_and_steel[damage=63] 1', 9: 'flint_and_steel 1' },
+    act: async () => { placeOn(P(2, 0)); await sleep(800) },
+    expect: { 0: ['flint_and_steel', 1], 9: null },
+    delta: { flint_and_steel: -1 }
+  },
+  {
+    id: 'G9-shears',
+    name: 'tool-break: shears that break on a sheep are replaced',
+    needsComponents: true,
+    config: [['tool-break: false', 'tool-break: true']],
+    slots: { 0: 'shears[damage=237] 1', 9: 'shears 1' },
+    setup: async () => { cmd('/summon sheep 2 100 0 {NoAI:1b}'); await sleep(800) },
+    act: async () => { await useOnEntity('sheep'); await sleep(800) },
+    expect: { 0: ['shears', 1], 9: null },
+    delta: { shears: -1 }
+  },
+  {
+    id: 'G9-rod',
+    name: 'tool-break: a fishing rod that breaks reeling in a hooked cow is replaced',
+    needsComponents: true,
+    config: [['tool-break: false', 'tool-break: true']],
+    slots: { 0: 'fishing_rod[damage=63] 1', 9: 'fishing_rod 1' },
+    // Reeling in a hooked mob costs durability on every version (from the ground it no longer does on 1.21.11).
+    setup: async () => { cmd('/summon cow 3 100 0.5 {NoAI:1b}'); await sleep(800) },
+    act: async () => {
+      useItem(0, -90, 12) // cast at the cow
+      await sleep(1200)
+      useItem(0, -90, 12) // reel it in
+      await sleep(800)
+    },
+    expect: { 0: ['fishing_rod', 1], 9: null },
+    delta: { fishing_rod: -1 }
+  },
+  // ---- milestone 4 audit fixes ----
+  {
+    id: 'X-pick-block',
+    name: 'right-click with the last diamond, then pick block swaps it away in the same tick: no refill',
+    only: (v) => v === '1.21.1',
+    onlyReason: 'the slot-swapping pick packet only exists before 1.21.4',
+    // A full hotbar: otherwise pick block moves the item into an empty hotbar slot instead of the held one.
+    slots: { 0: 'diamond 1', 1: 'stone 1', 2: 'stone 1', 3: 'stone 1', 4: 'stone 1', 5: 'stone 1', 6: 'stone 1',
+      7: 'stone 1', 8: 'stone 1', 9: 'diamond 5' },
+    act: async () => {
+      useItem(0)
+      bot._client.write('pick_item', { slot: 20 }) // swaps the held slot with empty slot 20
+      await sleep(800)
+    },
+    expect: { 0: null, 20: ['diamond', 1], 9: ['diamond', 5] },
+    delta: {}
+  },
+  {
+    id: 'X-armor-stand-swap',
+    name: 'swap the last diamond onto an armor stand, place the cobblestone you got back: refilled with cobblestone',
+    serverOnly: true,
+    slots: { 0: 'diamond 1', 20: 'diamond 5', 21: 'cobblestone 30' },
+    setup: async () => {
+      const hand = newComponents ? 'equipment:{mainhand:{id:"minecraft:cobblestone",count:1}}'
+        : 'HandItems:[{id:"minecraft:cobblestone",count:1},{}]'
+      // Clear of the block placed at (2, 100, 0), so it doesn't block that placement.
+      cmd(`/summon armor_stand 2.5 100 2.5 {ShowArms:1b,NoGravity:1b,${hand}}`)
+      await sleep(800)
+    },
+    act: async () => {
+      const stand = bot.nearestEntity((e) => e.name === 'armor_stand')
+      if (!stand) throw new Error('no armor stand')
+      // Raw interact-at, without turning the head first, so the place right after it is in the same tick and
+      // aimed as before.
+      bot._client.write('use_entity', {
+        target: stand.id, mouse: 2, sneaking: false, hand: 0, x: 0, y: 1.0, z: 0, location: new Vec3(0, 1.0, 0)
+      })
+      placeOn(P(2, 0))
+      await sleep(800)
+    },
+    expect: { 0: ['cobblestone', 30], 20: ['diamond', 5], 21: null },
+    delta: { diamond: -1 } // the diamond went to the stand; its cobblestone came back and was placed
+  },
+  {
+    id: 'X-offhand-stew',
+    name: 'last stew eaten from the offhand with an empty held slot: the bowl never lands in the hand',
+    slots: { 40: 'mushroom_stew 1', 25: 'mushroom_stew 1' },
+    setup: getHungry,
+    act: async () => { useItem(1); await sleep(2600) },
+    expect: { 40: ['mushroom_stew', 1], 0: null, 25: ['bowl', 1] },
+    delta: { mushroom_stew: -1, bowl: 1 }
+  },
+  {
+    id: 'X9-full',
+    name: 'last stew with an otherwise full inventory: refilled, the bowl takes the source slot, nothing dropped',
+    serverOnly: true,
+    slots: Object.fromEntries([...Array(36).keys()].map((i) => [i, i === 0 || i === 10 ? 'mushroom_stew 1' : 'stone 64'])),
+    setup: getHungry,
+    act: async () => {
+      useItem(0)
+      await sleep(2600)
+      const reply = await ask('/execute if entity @e[type=minecraft:item,distance=..8]')
+      if (!/conditional\.fail/.test(JSON.stringify(reply?.json ?? {}))) throw new Error('an item was dropped')
+    },
+    expect: { 0: ['mushroom_stew', 1], 10: ['bowl', 1] },
+    delta: { mushroom_stew: -1, bowl: 1 }
+  },
   {
     id: 'K-offhand',
     name: 'offhand last block refills from storage',
@@ -871,6 +1076,11 @@ async function run () {
   const only = process.env.BOT_ONLY ? new Set(process.env.BOT_ONLY.split(',')) : null
   for (const test of tests) {
     if (only && !only.has(test.id)) continue
+    if (test.only && !test.only(version)) {
+      skipped++
+      console.log(JSON.stringify({ version, id: test.id, skipped: true, name: test.name, reason: test.onlyReason }))
+      continue
+    }
     if ((test.needsComponents || test.serverOnly) && !serverMode) {
       skipped++
       console.log(JSON.stringify({ version, id: test.id, skipped: true, name: test.name,

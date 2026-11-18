@@ -15,10 +15,19 @@ public final class Batch {
      * Same item as the check already pending for that slot: merge (SPEC §3 step 4). A different item: the slot
      * changed in between (an armor-stand swap, another plugin), so the later check replaces the earlier one;
      * the item used last is the one to refill.
+     *
+     * <p>A tool is the same item across its damage: one use can be recorded at several damage values (a
+     * flint and steel is recorded on the right-click, at its break with maximum damage, and again in the
+     * BlockPlaceEvent for the fire, where Paper briefly restores the pre-use copy). Those records merge, so the
+     * tool break isn't replaced by the later record.
      */
     public void add(Check check) {
-        bySlot.merge(check.slot(), check,
-                (earlier, later) -> earlier.snapshot().isSimilar(later.snapshot()) ? earlier.merge(later) : later);
+        bySlot.merge(check.slot(), check, (earlier, later) -> sameItem(earlier.snapshot(), later.snapshot())
+                ? earlier.merge(later) : later);
+    }
+
+    private static boolean sameItem(ItemView a, ItemView b) {
+        return a.isSimilar(b) || (a.maxDurability() > 0 && a.sameIgnoringWear(b));
     }
 
     /** Forgets the check for one slot, if any. */

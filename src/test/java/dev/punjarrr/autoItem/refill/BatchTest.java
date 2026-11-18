@@ -52,6 +52,22 @@ class BatchTest {
     }
 
     @Test
+    void aToolRecordedAtDifferentDamageInOneUseStaysOneToolBreakCheck() {
+        // Flint and steel, as Paper reports it: right-click (damage 63), break (64), then BlockPlaceEvent for
+        // the fire with the pre-use copy restored (63 again).
+        Batch batch = new Batch();
+        batch.add(new Check(0, FakeItem.tool("flint_and_steel", 64, 63), Set.of(), EnumSet.of(Trigger.RIGHT_CLICK),
+                WORLD, "SURVIVAL"));
+        batch.add(new Check(0, FakeItem.tool("flint_and_steel", 64, 64), Set.of(), EnumSet.of(Trigger.TOOL_BREAK),
+                WORLD, "SURVIVAL"));
+        batch.add(new Check(0, FakeItem.tool("flint_and_steel", 64, 63), Set.of(), EnumSet.of(Trigger.BLOCK_PLACE),
+                WORLD, "SURVIVAL"));
+
+        assertEquals(1, batch.checks().size());
+        assertTrue(batch.checks().getFirst().isToolBreak());
+    }
+
+    @Test
     void toolBreakWinsWhenMerged() {
         FakeItem shears = FakeItem.tool("shears", 238, 237);
         Batch batch = new Batch();
