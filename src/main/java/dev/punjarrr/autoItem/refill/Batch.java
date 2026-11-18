@@ -27,7 +27,10 @@ public final class Batch {
     }
 
     private static boolean sameItem(ItemView a, ItemView b) {
-        return a.isSimilar(b) || (a.maxDurability() > 0 && a.sameIgnoringWear(b));
+        // Damage is the only difference allowed: another tool of the same type (other name or enchantments)
+        // swapped into the slot is a different item, so tool-break matching never runs against the wrong one.
+        return a.isSimilar(b) || (a.maxDurability() > 0 && a.sameIgnoringWear(b) && a.sameCustomName(b)
+                && a.sameEnchantments(b));
     }
 
     /** Forgets the check for one slot, if any. */

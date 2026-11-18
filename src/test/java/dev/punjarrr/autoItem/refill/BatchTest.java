@@ -68,6 +68,18 @@ class BatchTest {
     }
 
     @Test
+    void anotherToolOfTheSameTypeSwappedInIsADifferentItem() {
+        Batch batch = new Batch();
+        batch.add(new Check(0, FakeItem.tool("diamond_pickaxe", 1561, 10).named("X"), Set.of(),
+                EnumSet.of(Trigger.RIGHT_CLICK), WORLD, "SURVIVAL"));
+        FakeItem broken = FakeItem.tool("diamond_pickaxe", 1561, 1561);
+        batch.add(new Check(0, broken, Set.of(), EnumSet.of(Trigger.TOOL_BREAK), WORLD, "SURVIVAL"));
+
+        assertSame(broken, batch.checks().getFirst().snapshot());
+        assertTrue(batch.checks().getFirst().isToolBreak());
+    }
+
+    @Test
     void toolBreakWinsWhenMerged() {
         FakeItem shears = FakeItem.tool("shears", 238, 237);
         Batch batch = new Batch();
