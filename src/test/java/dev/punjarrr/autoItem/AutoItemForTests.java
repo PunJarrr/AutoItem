@@ -19,9 +19,9 @@ import java.util.function.Predicate;
 public class AutoItemForTests extends AutoItem {
 
     /**
-     * Loads this class with the real plugin.yml's permissions. MockBukkit only registers them when it loads
-     * the plugin.yml main class itself; without them {@code autoitem.use} would fall back to op-only and every
-     * refill would be gated off.
+     * Loads this class with the real plugin.yml (for its command) and registers plugin.yml's permissions,
+     * which MockBukkit only does when it loads the plugin.yml main class itself; without them
+     * {@code autoitem.use} would fall back to op-only and every refill would be gated off.
      */
     static AutoItemForTests load() {
         try (InputStream in = AutoItemForTests.class.getResourceAsStream("/plugin.yml")) {
@@ -30,7 +30,7 @@ public class AutoItemForTests extends AutoItem {
             for (Permission permission : description.getPermissions()) {
                 pluginManager.addPermission(permission);
             }
-            AutoItemForTests plugin = MockBukkit.load(AutoItemForTests.class);
+            AutoItemForTests plugin = MockBukkit.loadWith(AutoItemForTests.class, description);
             if (pluginManager.getPermission("autoitem.use") == null) {
                 throw new AssertionError("plugin.yml permissions were not registered");
             }

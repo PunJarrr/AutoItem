@@ -79,7 +79,7 @@ The overriding requirement is **no duplication and no loss**. A refill only ever
 | 8 | No source slot matches (§4.2) | `Skip(NO_SOURCE)` |
 | 9 | Otherwise | `Refill(source, target)` |
 
-The planner runs on a small model: `ItemView` (material key, amount, max durability, damage, `isSimilar(other)`, custom name, enchantments, a PDC fingerprint) and an array of 41 slots. At runtime `ItemView` wraps cloned `ItemStack`s; tests use a fake. It needs no server.
+The planner runs on a small model: `ItemView` (material key, amount, max durability, damage, `isSimilar(other)`, custom name, enchantments, "same item ignoring wear") and an array of 41 slots. At runtime `ItemView` wraps cloned `ItemStack`s; tests use a fake. It needs no server.
 
 ### The refill (one synchronous step, no yield)
 
@@ -131,7 +131,7 @@ All listeners are `@EventHandler(priority = MONITOR, ignoreCancelled = true)`, e
 | `throwables` | `PlayerLaunchProjectileEvent` | both hands | Only when `shouldConsume()`. Snowballs, eggs, ender pearls, splash/lingering potions, experience bottles, wind charges. Tridents are damageable, so rule 6 skips them (they come back with Loyalty). |
 | `right-click` | `PlayerInteractEvent`, `PlayerInteractEntityEvent`, `EntityPlaceEvent`, `HangingPlaceEvent`, `PlayerArmorStandManipulateEvent`, `PlayerElytraBoostEvent` | `getHand()` | Spawn eggs, boats, minecarts, bone meal, firework rockets, end crystals, ender eyes, item frames, paintings, armor stands, feeding/breeding, name tags, leads, cauldrons, filling glass bottles and bowls. Items whose `Material#getEquipmentSlot()` isn't a hand are not recorded (right-click equips them). `PlayerInteractEvent` uses `useItemInHand() != DENY` and right-click actions only. |
 | `bows` | `PlayerReadyArrowEvent` | both hands (the weapon's hand never matches its ammo) | Fires while a bow or crossbow picks its ammo (bow: drawing starts and on release; crossbow: on load), before anything is taken from the inventory. `EntityShootBowEvent` comes after a bow has drawn its arrow, too late to see the last one. It names the exact ammo, so tipped arrows match exactly and an unrelated item in the other hand is never recorded. Infinity leaves the arrow, so the check finds it still there. Ammo pulled from storage slots isn't in a hand, so nothing to refill. |
-| `tool-break` (default **off**) | `PlayerItemBreakEvent` | both hands | Record a `TOOL_BREAK` check for each hand slot holding the broken item's material. Armor slots are ignored in v1. |
+| `tool-break` (default **off**) | `PlayerItemBreakEvent` | both hands | Fires while the broken tool is still in its slot (checked in the 1.21.1 and 26.2 server code). Record a `TOOL_BREAK` check for each hand holding exactly that item (isSimilar). Broken armor never matches a hand, so it is never re-equipped (not in v1). |
 
 - Dropping with Q, inventory clicks, hand swaps (F) and hotbar scrolling never record anything, and the first three discard what was recorded (§3 step 5).
 - Known gap: on 26.x a plugin or datapack item with an `equippable` component on a non-armor material isn't recognised as "equips on right-click" (1.21.1 has no API to see components), so equipping the last one refills the hand. Conserved; accepted.
@@ -140,13 +140,14 @@ All listeners are `@EventHandler(priority = MONITOR, ignoreCancelled = true)`, e
 ### 4.2 Matching and source slots
 
 - **Normal checks:** a source matches when `source.isSimilar(snapshot)`. So a Speed potion only refills from Speed potions, a named or enchanted item only from an identical one.
-- **Candidates:** storage slots `9–35`, then `0–8` if `sources.hotbar` is on (default on). Never the target slot, and never the hotbar slot the player is holding at task time: taking it would just empty the main hand (when both hands run out together, the offhand must not take the stack that was just put in the main hand).
+- **Candidates:** storage slots `9–35`, then `0–8` if `sources.hotbar` is on (default on). Never the target slot, and never the hotbar slot the player is holding at task time: taking it would just empty the main hand (when both hands run out together, the offhand must not take the stack that was just put in the main hand). Slots already refilled earlier in the same batch are never sources either, so the offhand check can't take back what the main-hand check just put in (even if the player scrolled away in between).
 - **Order:** main inventory (`9–35`) before hotbar; within each, the **smallest** matching stack first (tidies partial stacks); ties go to the lowest slot index.
 - **Ignored items** (`ignored-items`) are never refilled: if the snapshot matches an entry, skip.
 - **Tool break** (isSimilar can't work because durability differs):
   - Candidate must have the same material.
   - Custom name: a candidate with a custom name is only allowed if the broken item had the exact same name; an unnamed broken tool only takes unnamed candidates.
-  - Candidate's PDC fingerprint must equal the broken item's, so plugin custom items never stand in for vanilla ones (proposed addition, remove if unwanted).
+  - Candidate must be the same item once wear is ignored: `isSimilar` after resetting damage, enchantments, repair cost and custom name on copies of both. Item name, lore, model, attributes, unbreakable and all custom data (PDC, and other plugins' NBT such as ItemsAdder or MMOItems) must match, so a custom tool never stands in for a plain one or the other way round.
+  - Tool-break matching only applies when the used item can break (max durability > 0); a tool-break record merged into a check for another item keeps that item's exact matching.
   - Preference: identical enchantments first, then main inventory before hotbar, then the least-damaged, then the lowest slot.
 
 ### 4.3 Remainders
@@ -187,7 +188,7 @@ Checked at event time (to avoid recording) **and again at task time** (rule 1):
 
 ### 4.6 Feedback
 
-On every successful refill: the configured sound (on by default, quiet), and the action-bar message (off by default). `<item>` in the message renders the item's translated name for the player's client.
+On every successful refill (only when `RefillExecutor` really moved a stack): the configured sound (on by default, quiet), and the action-bar message (off by default). The sound is an Adventure sound built from `feedback.sound.key`, so a key an older version doesn't know plays nothing. `<item>` in the message is the item's custom name, or its name translated on the player's client.
 
 ## 5. Default `config.yml`
 
@@ -329,16 +330,16 @@ Each ends with `./gradlew build` green, `/test-server` on all versions, a commit
 | U17 | Each trigger disabled at task time; a merged check runs if any trigger is on; right-click merged with a disabled `block-place` | `DISABLED`; refill; `DISABLED` |
 | U18 | Each gate (offline, dead, creative, spectator, disabled world, toggle off, no permission, master off) | `GATE` |
 | U19 | World or game mode changed since the event | `CONTEXT_CHANGED` |
-| U20 | `NORMAL` check with damageable snapshot (trident, shears) | `DAMAGEABLE` |
+| U20 | `NORMAL` check with damageable snapshot (trident, shears); a tool break merged into a Speed potion check | `DAMAGEABLE`; still only a Speed potion |
 | U21 | Tool break, same material, identical enchants available in hotbar and different enchants in main | Identical enchants win |
 | U22 | Tool break, candidate custom-named, broken unnamed | Not picked |
 | U23 | Tool break, both named identically | Picked |
-| U24 | Tool break, candidate with different PDC fingerprint | Not picked |
+| U24 | Tool break, candidate with different plugin data, custom data, lore or model; a broken custom tool with a plain and a custom spare | Not picked; only the custom spare |
 | U25 | Tool break, several candidates, same enchants | Main before hotbar, then least damaged |
 | U26 | Tool break with `tool-break: false` | `DISABLED` |
 | U27 | Remainders inverse: BUCKET → all filled buckets; GLASS_BOTTLE → POTION, HONEY_BOTTLE | As listed |
 | U28 | Dedup: two records same slot same tick; discard one slot / all | One check, first snapshot, union of remainders, TOOL_BREAK wins, right-click dropped next to a specific trigger; discarded checks are gone |
-| U29 | Two checks (main + offhand) needing the same source material, only one source | Main hand gets it, offhand `NO_SOURCE` (the refilled main hand is the held slot) |
+| U29 | Two checks (main + offhand) needing the same source material, only one source; same after scrolling away from the refilled slot | Main hand gets it, offhand `NO_SOURCE` (the refilled slot is held, or reserved for this batch) |
 | U30 | Config: invalid values, unknown materials, unknown tags, `NONE`, missing keys, broken MiniMessage | Warnings with key path; defaults |
 | U31 | Conservation property: random inventories × random checks, apply plan to model | Per-material totals (incl. dropped) unchanged; target only overwritten when empty/allowed |
 
@@ -353,7 +354,7 @@ Each ends with `./gradlew build` green, `/test-server` on all versions, a commit
 | K5 | Per-event: snapshot amount read at event time is pre-decrement (amount-1 gate) |
 | K6 | Each listener records the right slot and hand (incl. both-hands events): bucket fill/empty, thrown snowball from the offhand, non-consuming throw, right-click air (reported cancelled), spawn egg, denied use, left click, right-click equip, bow arrow in either hand, infinity, crossbow rocket, crossbow loading from storage with an unrelated offhand item |
 | K8 | Discards: totem pop, drop and hand swap after a right-click don't refill; a cancelled resurrect discards nothing; a real use after a discard still refills (inventory clicks can't be built in MockBukkit; the bot covers X4) |
-| K7 | Toggle persists in PDC; reload swaps config |
+| K7 | `/autoitem toggle` flips and persists the PDC key and stops refills; needs `autoitem.toggle`; refused from the console. `/autoitem reload` applies a new config, reports warnings, keeps the old config on broken YAML, needs `autoitem.reload`. Usage on no/unknown argument; tab completion only lists allowed subcommands. No refill without `autoitem.use` or in a disabled world. Tool break off by default; on, identical enchantments win and a named tool never stands in. Sound by default, action bar when configured, nothing when no refill happened |
 
 ### In-game (Pun, any test server unless noted)
 
@@ -370,7 +371,7 @@ Each ends with `./gradlew build` green, `/test-server` on all versions, a commit
 | G9 | `tool-break: true`, break an enchanted pickaxe with a plain and an identical one available; a named sword | Identical enchants picked; named never substitutes |
 | G10 | Throw a trident, equip armor by right-click | No refill |
 | G11 | Q the last item; right-click the air with the last diamond and Q in the same tick (G11b) | No refill |
-| G12 | `/autoitem toggle`, disabled world, creative mode | No refill |
+| G12 | `/autoitem toggle`, disabled world (via config + `/autoitem reload`), creative mode | No refill |
 | G13 | Sound on by default; action bar after enabling it | As configured |
 | V1 | Boot on Paper 1.21.1, 1.21.11, 26.2 and Folia | Enables, no errors or warnings |
 
@@ -406,4 +407,4 @@ Answered before M1:
 Still open:
 
 - Final listing name for Modrinth/Hangar if "AutoItem" is taken (decide before release; it's a `plugin.yml` + `settings.gradle.kts` change).
-- The tool-break PDC-fingerprint rule (§4.2) and the tool-break tie-breakers (main before hotbar, then least damaged) go beyond the brief; keep or change?
+- The tool-break tie-breakers (identical enchantments, then main before hotbar, then least damaged) go beyond the brief; keep or change? (The plugin-data rule became "same item ignoring wear" after the milestone 3 review: custom tools from other plugins kept their identity in data the PDC check couldn't see.)

@@ -37,7 +37,7 @@ console.log(x.slice(0,8)+'-'+x.slice(8,12)+'-'+x.slice(12,16)+'-'+x.slice(16,20)
 printf '[{"uuid":"%s","name":"AutoItemBot","level":4,"bypassesPlayerLimit":false}]\n' "$uuid" > "$dir/ops.json"
 
 ( t=0; until grep -q 'Done (' "$log" 2>/dev/null || [ $t -ge 300 ]; do sleep 2; t=$((t+2)); done; sleep 3
-  BOT_DEBUG=${BOT_DEBUG:-} node "$here/tests.js" "$version" 25565 > "$results" 2> "build/bot/$name.stderr"; echo $? > "build/bot/$name.exit"
+  RUN_DIR="$dir" BOT_DEBUG=${BOT_DEBUG:-} node "$here/tests.js" "$version" 25565 > "$results" 2> "build/bot/$name.stderr"; echo $? > "build/bot/$name.exit"
   echo stop
   t=0; while pgrep -f 'java.*com.mojang.eula.agree' >/dev/null && [ $t -lt 90 ]; do sleep 2; t=$((t+2)); done
   pgrep -f 'java.*com.mojang.eula.agree' >/dev/null && { echo "SIGTERM fallback" >&2; pkill -TERM -f 'java.*com.mojang.eula.agree'; } ) | ./gradlew "$task" --console=plain >> "$log" 2>&1

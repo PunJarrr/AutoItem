@@ -411,6 +411,20 @@ class RefillPlannerTest {
         }
 
         @Test
+        void u24_anotherPluginsCustomToolNeverStandsIn() {
+            // e.g. an ItemsAdder/MMOItems pickaxe: same material, its identity in custom data, lore or model.
+            ItemView[] slots = slotsWith(20, FakeItem.tool("diamond_pickaxe", 1561, 0).meta("itemsadder:ruby")
+                    .enchanted(efficiency));
+            assertSkip(Reason.NO_SOURCE, planBreak(slots));
+            // ...and a broken custom tool is only replaced by the same custom tool.
+            ItemView brokenCustom = FakeItem.tool("diamond_pickaxe", 1561, 1561).meta("itemsadder:ruby");
+            ItemView[] mixed = slotsWith(20, FakeItem.tool("diamond_pickaxe", 1561, 0));
+            mixed[21] = FakeItem.tool("diamond_pickaxe", 1561, 300).meta("itemsadder:ruby");
+            assertRefill(21, 2, planner.plan(check(2, brokenCustom, Trigger.TOOL_BREAK), mixed,
+                    settings(true, true, Set.of()), survival()));
+        }
+
+        @Test
         void u25_mainBeforeHotbarThenLeastDamaged() {
             ItemView[] slots = empty();
             slots[4] = FakeItem.tool("diamond_pickaxe", 1561, 0).enchanted(efficiency);
@@ -431,6 +445,29 @@ class RefillPlannerTest {
                     survival());
             assertSkip(Reason.DISABLED, decision);
         }
+    }
+
+    @Test
+    void u20_toolBreakMergedIntoANonToolCheckKeepsExactMatching() {
+        // The last Speed potion was drunk in slot 0, then a pickaxe picked up into slot 0 broke in the same
+        // tick: the merged check must still only refill a Speed potion, not any potion.
+        Check merged = check(0, FakeItem.of("potion", 1).meta("swiftness"), Trigger.CONSUME)
+                .merge(check(0, FakeItem.tool("diamond_pickaxe", 1561, 1561), Trigger.TOOL_BREAK));
+        ItemView[] slots = slotsWith(20, FakeItem.of("potion", 1).meta("slowness"));
+        assertSkip(Reason.NO_SOURCE, plan(merged, slots));
+        slots[21] = FakeItem.of("potion", 1).meta("swiftness");
+        assertRefill(21, 0, plan(merged, slots));
+    }
+
+    @Test
+    void u29_aSlotRefilledEarlierInTheBatchIsNeverASource() {
+        // Main hand refilled slot 3, then the player scrolled to slot 6: slot 3 is in the hotbar and no longer
+        // held, but the offhand must not take it back out.
+        ItemView[] slots = slotsWith(3, FakeItem.of("cobblestone", 64));
+        Check off = check(40, FakeItem.of("cobblestone", 1), Trigger.BLOCK_PLACE);
+        PlayerState scrolled = new PlayerState(true, false, "SURVIVAL", WORLD, "world", true, true, 6);
+        assertRefill(3, 40, planner.plan(off, slots, settings(), scrolled));
+        assertSkip(Reason.NO_SOURCE, planner.plan(off, slots, settings(), scrolled, Set.of(3)));
     }
 
     // ---- U29: two checks, one source ----

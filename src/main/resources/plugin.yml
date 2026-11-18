@@ -8,6 +8,11 @@ folia-supported: true
 
 authors: [ PunJarrr ]
 
+commands:
+  autoitem:
+    description: AutoItem commands.
+    usage: /autoitem <toggle|reload>
+
 permissions:
   autoitem.use:
     description: Your hand is refilled when you use up its last item.

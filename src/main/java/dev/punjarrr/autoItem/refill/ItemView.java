@@ -27,6 +27,11 @@ public interface ItemView {
 
     boolean sameEnchantments(ItemView other);
 
-    /** Same PersistentDataContainer contents, so plugin items never stand in for vanilla ones. */
-    boolean samePluginData(ItemView other);
+    /**
+     * The same item once wear is ignored: identical apart from amount, damage, enchantments, repair cost and
+     * custom name. Everything else counts (item name, lore, model, attributes, unbreakable, plugin data and
+     * any other custom data), so a custom tool from another plugin never stands in for a plain one, or the
+     * other way round. Used for tool breaks, where isSimilar can't match because durability differs.
+     */
+    boolean sameIgnoringWear(ItemView other);
 }

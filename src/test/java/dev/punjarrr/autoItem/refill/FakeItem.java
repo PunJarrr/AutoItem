@@ -49,7 +49,7 @@ record FakeItem(String material, int amount, String meta, int maxDurability, int
     @Override
     public boolean isSimilar(ItemView other) {
         return other instanceof FakeItem o && material.equals(o.material) && meta.equals(o.meta)
-                && damage == o.damage && sameCustomName(o) && sameEnchantments(o) && samePluginData(o);
+                && damage == o.damage && sameCustomName(o) && sameEnchantments(o) && pluginData.equals(o.pluginData);
     }
 
     @Override
@@ -67,8 +67,10 @@ record FakeItem(String material, int amount, String meta, int maxDurability, int
         return other instanceof FakeItem o && enchantments.equals(o.enchantments);
     }
 
+    /** Ignores amount, damage, enchantments and custom name, like the Bukkit view. */
     @Override
-    public boolean samePluginData(ItemView other) {
-        return other instanceof FakeItem o && pluginData.equals(o.pluginData);
+    public boolean sameIgnoringWear(ItemView other) {
+        return other instanceof FakeItem o && material.equals(o.material) && meta.equals(o.meta)
+                && pluginData.equals(o.pluginData);
     }
 }

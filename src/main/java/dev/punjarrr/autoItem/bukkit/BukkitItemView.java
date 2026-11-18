@@ -5,6 +5,7 @@ import net.kyori.adventure.text.Component;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.Damageable;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.meta.Repairable;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Objects;
@@ -17,6 +18,7 @@ public final class BukkitItemView implements ItemView {
 
     private final ItemStack stack;
     private @Nullable ItemMeta meta;
+    private @Nullable ItemStack withoutWear;
 
     private BukkitItemView(ItemStack stack) {
         this.stack = stack;
@@ -90,14 +92,30 @@ public final class BukkitItemView implements ItemView {
     }
 
     @Override
-    public boolean samePluginData(ItemView other) {
-        if (!(other instanceof BukkitItemView view)) {
-            return false;
+    public boolean sameIgnoringWear(ItemView other) {
+        return other instanceof BukkitItemView view && withoutWear().isSimilar(view.withoutWear());
+    }
+
+    /** A copy with damage, enchantments, repair cost and custom name reset (all 1.21.1-safe meta calls). */
+    private ItemStack withoutWear() {
+        if (withoutWear == null) {
+            ItemStack base = stack.clone();
+            base.setAmount(1);
+            ItemMeta baseMeta = base.getItemMeta();
+            if (baseMeta != null) {
+                if (baseMeta instanceof Damageable damageable) {
+                    damageable.setDamage(0);
+                }
+                if (baseMeta instanceof Repairable repairable) {
+                    repairable.setRepairCost(0);
+                }
+                baseMeta.removeEnchantments();
+                baseMeta.displayName(null);
+                base.setItemMeta(baseMeta);
+            }
+            withoutWear = base;
         }
-        if (meta() == null || view.meta() == null) {
-            return meta() == null && view.meta() == null;
-        }
-        return meta().getPersistentDataContainer().equals(view.meta().getPersistentDataContainer());
+        return withoutWear;
     }
 
     @Override

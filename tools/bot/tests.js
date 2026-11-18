@@ -13,13 +13,26 @@
 //  - client mode (Folia, which disables those commands): slots are set with the creative-inventory packet and
 //    read from the bot's own inventory view. Tests that need item components (potions) are skipped.
 
+import { readFileSync, writeFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import mineflayer from 'mineflayer'
+import prismarineChat from 'prismarine-chat'
 import prismarineItem from 'prismarine-item'
 import { Vec3 } from 'vec3'
 
 const version = process.argv[2]
 const port = Number(process.argv[3] ?? 25565)
 const BOT_NAME = 'AutoItemBot'
+// The test server's plugin config, edited by tests that need another setting (then restored).
+const CONFIG_FILE = resolve(process.env.RUN_DIR ?? '.', 'plugins/AutoItem/config.yml')
+let originalConfig = null
+
+/** Item component syntax changed in 1.21.5 (enchantments map, text components as SNBT). */
+const [, minor, patch] = version.split('.').map(Number)
+const newComponents = version.split('.')[0] !== '1' || minor > 21 || (minor === 21 && (patch ?? 0) >= 5)
+const efficiency5 = newComponents ? 'enchantments={"minecraft:efficiency":5}' : 'enchantments={levels:{"minecraft:efficiency":5}}'
+const named = (name) => newComponents ? `custom_name="${name}"` : `custom_name='"${name}"'`
+const lore = (line) => newComponents ? `lore=["${line}"]` : `lore=['"${line}"']`
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -35,6 +48,7 @@ const bot = mineflayer.createBot({ host: '127.0.0.1', port, username: BOT_NAME, 
 let sequence = 1000
 let serverMode = true
 let Item
+let ChatMessage
 
 function cmd (command) {
   bot.chat(command.startsWith('/') ? command : `/${command}`)
@@ -153,6 +167,52 @@ async function give (slots) {
   }
   cmd('/gamemode survival @s')
   await sleep(700)
+}
+
+/** Waits for the next chat/system message matching `pattern`. */
+function nextMessage (pattern, ms = 3000) {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => { bot.off('messagestr', onMessage); resolve(null) }, ms)
+    function onMessage (text) {
+      if (pattern.test(text)) { clearTimeout(timer); bot.off('messagestr', onMessage); resolve(text) }
+    }
+    bot.on('messagestr', onMessage)
+  })
+}
+
+/** Rewrites the test server's config.yml with replacements ([from, to] pairs) and runs /autoitem reload. */
+async function configure (...pairs) {
+  originalConfig ??= readFileSync(CONFIG_FILE, 'utf8')
+  let yaml = originalConfig
+  for (const [from, to] of pairs) {
+    if (!yaml.includes(from)) throw new Error(`config.yml has no "${from}"`)
+    yaml = yaml.replace(from, to)
+  }
+  writeFileSync(CONFIG_FILE, yaml)
+  const reply = nextMessage(/Config (reloaded|has errors)/)
+  cmd('/autoitem reload')
+  const text = await reply
+  if (!text || !/Config reloaded\./.test(text)) throw new Error(`reload failed: ${text}`)
+}
+
+async function restoreConfig () {
+  if (originalConfig !== null && readFileSync(CONFIG_FILE, 'utf8') !== originalConfig) await configure()
+}
+
+/**
+ * Mines the floor block at (x, 99, z) with the held item, with raw packets: Mineflayer's dig() reads the
+ * tool's enchantments, which it can't decode on 1.21.1. Glass takes about 0.5 s.
+ */
+async function mine (x, z) {
+  // Glass: it drops nothing without Silk Touch (so no pickup lands in the emptied slot) but still costs the
+  // pickaxe durability.
+  cmd(`/setblock ${x} 99 ${z} glass`)
+  await sleep(300)
+  const location = new Vec3(x, 99, z)
+  await bot.lookAt(location.offset(0.5, 1, 0.5), true)
+  bot._client.write('block_dig', { status: 0, location, face: 1, sequence: sequence++ })
+  await sleep(1200)
+  bot._client.write('block_dig', { status: 2, location, face: 1, sequence: sequence++ })
 }
 
 /** Makes the bot hungry so food can be eaten. */
@@ -589,6 +649,147 @@ const tests = [
     expect: { 0: ['diamond', 1], 9: ['diamond', 5] },
     delta: {}
   },
+  // ---- milestone 3: tool breaking (off by default; switched on for these tests) ----
+  {
+    id: 'G9a',
+    name: 'tool-break on: a pickaxe that breaks is replaced by the same pickaxe',
+    needsComponents: true,
+    config: [['tool-break: false', 'tool-break: true']],
+    slots: { 0: 'diamond_pickaxe[damage=1560] 1', 9: 'diamond_pickaxe 1' },
+    act: async () => { await mine(1, 0); await sleep(800) },
+    expect: { 0: ['diamond_pickaxe', 1], 9: null },
+    delta: { diamond_pickaxe: -1 }
+  },
+  {
+    id: 'G9b',
+    name: 'tool-break: identical enchantments win over a fresher plain pickaxe',
+    needsComponents: true,
+    config: [['tool-break: false', 'tool-break: true']],
+    slots: {
+      0: `diamond_pickaxe[damage=1560,${efficiency5}] 1`,
+      9: 'diamond_pickaxe 1',
+      5: `diamond_pickaxe[damage=900,${efficiency5}] 1`
+    },
+    act: async () => { await mine(1, 0); await sleep(800) },
+    expect: { 0: ['diamond_pickaxe', 1], 9: ['diamond_pickaxe', 1], 5: null },
+    delta: { diamond_pickaxe: -1 }
+  },
+  {
+    id: 'G9c',
+    name: 'tool-break: a named pickaxe never stands in for an unnamed one',
+    needsComponents: true,
+    config: [['tool-break: false', 'tool-break: true']],
+    slots: { 0: 'diamond_pickaxe[damage=1560] 1', 9: `diamond_pickaxe[${named('Excavator')}] 1` },
+    act: async () => { await mine(1, 0); await sleep(800) },
+    expect: { 0: null, 9: ['diamond_pickaxe', 1] },
+    delta: { diamond_pickaxe: -1 }
+  },
+  {
+    id: 'G9e',
+    name: 'tool-break: a pickaxe that differs only by lore (a custom plugin item) never stands in',
+    needsComponents: true,
+    config: [['tool-break: false', 'tool-break: true']],
+    slots: { 0: 'diamond_pickaxe[damage=1560] 1', 9: `diamond_pickaxe[${lore('Ruby Pickaxe')}] 1` },
+    act: async () => { await mine(1, 0); await sleep(800) },
+    expect: { 0: null, 9: ['diamond_pickaxe', 1] },
+    delta: { diamond_pickaxe: -1 }
+  },
+  {
+    id: 'G9d',
+    name: 'tool-break off (default): a broken pickaxe is not replaced',
+    needsComponents: true,
+    slots: { 0: 'diamond_pickaxe[damage=1560] 1', 9: 'diamond_pickaxe 1' },
+    act: async () => { await mine(1, 0); await sleep(800) },
+    expect: { 0: null, 9: ['diamond_pickaxe', 1] },
+    delta: { diamond_pickaxe: -1 }
+  },
+  // ---- milestone 3: toggle, worlds, feedback ----
+  {
+    id: 'G12a',
+    name: '/autoitem toggle off: no refill (and back on afterwards)',
+    slots: { 0: 'cobblestone 1', 9: 'cobblestone 64' },
+    setup: async () => {
+      const reply = nextMessage(/Auto refill (enabled|disabled)/)
+      cmd('/autoitem toggle')
+      if (!/disabled/.test(await reply ?? '')) throw new Error('toggle did not report disabled')
+    },
+    act: async () => {
+      placeOn(P(2, 0))
+      await sleep(800)
+    },
+    after: async () => {
+      const reply = nextMessage(/Auto refill (enabled|disabled)/)
+      cmd('/autoitem toggle')
+      if (!/enabled/.test(await reply ?? '')) throw new Error('toggle did not report enabled')
+    },
+    expect: { 0: null, 9: ['cobblestone', 64] },
+    delta: { cobblestone: -1 }
+  },
+  {
+    id: 'G12b',
+    name: 'world in disabled-worlds: no refill',
+    config: [['disabled-worlds: []', 'disabled-worlds: [world]']],
+    slots: { 0: 'cobblestone 1', 9: 'cobblestone 64' },
+    act: async () => { placeOn(P(2, 0)); await sleep(800) },
+    expect: { 0: null, 9: ['cobblestone', 64] },
+    delta: { cobblestone: -1 }
+  },
+  {
+    id: 'G13a',
+    name: 'refill plays the item pickup sound',
+    slots: { 0: 'cobblestone 1', 9: 'cobblestone 64' },
+    act: async (state) => {
+      state.sounds = []
+      // Recognised by its volume and pitch (config: 0.3 / 1.4): Mineflayer's sound id -> name table is off
+      // by one on some versions, so the name it reports isn't reliable.
+      const onSound = (name, position, volume, pitch) => state.sounds.push({ name: String(name), volume, pitch })
+      bot.on('soundEffectHeard', onSound)
+      placeOn(P(2, 0))
+      await sleep(800)
+      bot.off('soundEffectHeard', onSound)
+      const ours = state.sounds.some((s) => Math.abs(s.volume - 0.3) < 0.01 && Math.abs(s.pitch - 1.4) < 0.01)
+      if (!ours) {
+        throw new Error(`no 0.3/1.4 sound; heard: ${state.sounds.map((s) => `${s.name} ${s.volume}/${s.pitch}`).join(', ') || 'nothing'}`)
+      }
+    },
+    expect: { 0: ['cobblestone', 64], 9: null },
+    delta: { cobblestone: -1 }
+  },
+  {
+    id: 'G13b',
+    name: 'action-bar on: "Refilled <item>" on the action bar',
+    config: [['action-bar: false', 'action-bar: true']],
+    slots: { 0: 'cobblestone 1', 9: 'cobblestone 64' },
+    act: async () => {
+      // Raw packets: Paper's sendActionBar uses the set-action-bar-text packet ('action_bar'); a system chat
+      // with isActionBar is the other way to show one. Mineflayer surfaces neither as 'actionBar' here.
+      const bar = new Promise((resolve) => {
+        const done = (text) => {
+          clearTimeout(timer)
+          bot._client.off('action_bar', onActionBar)
+          bot._client.off('system_chat', onChat)
+          resolve(text)
+        }
+        const decode = (content) => {
+          try {
+            return ChatMessage.fromNotch(content).toString() // JSON or NBT, depending on the version
+          } catch (error) {
+            return `(undecodable: ${error.message})`
+          }
+        }
+        const onActionBar = (packet) => done(decode(packet.text))
+        const onChat = (packet) => { if (packet.isActionBar) done(decode(packet.content)) }
+        const timer = setTimeout(() => done(null), 2000)
+        bot._client.on('action_bar', onActionBar)
+        bot._client.on('system_chat', onChat)
+      })
+      placeOn(P(2, 0))
+      const text = await bar
+      if (!text || !text.startsWith('Refilled')) throw new Error(`action bar: ${text}`)
+    },
+    expect: { 0: ['cobblestone', 64], 9: null },
+    delta: { cobblestone: -1 }
+  },
   {
     id: 'K-offhand',
     name: 'offhand last block refills from storage',
@@ -607,6 +808,7 @@ async function run () {
   })
   await sleep(1500)
   Item = prismarineItem(bot.registry)
+  ChatMessage = prismarineChat(bot.registry)
   cmd('/time set day')
   await reset(0)
   cmd('/item replace entity @s weapon.offhand with stick 3')
@@ -628,19 +830,27 @@ async function run () {
     let problems
     try {
       await reset(test.held ?? 0)
+      if (test.config) await configure(...test.config)
       await give(test.slots)
       if (test.setup) await test.setup()
       const names = [...new Set([...Object.values(test.slots).map(itemId), ...Object.keys(test.delta)])]
       const before = await serverTotals(names)
-      await test.act()
+      await test.act({})
       problems = await check(test.expect, before, test.delta, names)
     } catch (error) {
       problems = [`error: ${error.message}`]
+    }
+    try {
+      if (test.after) await test.after()
+      if (test.config) await restoreConfig()
+    } catch (error) {
+      problems.push(`cleanup: ${error.message}`)
     }
     const pass = problems.length === 0
     if (pass) passed++
     console.log(JSON.stringify({ version, id: test.id, pass, name: test.name, problems }))
   }
+  await restoreConfig().catch(() => {})
   const ran = (only ? tests.filter((t) => only.has(t.id)).length : tests.length) - skipped
   console.log(JSON.stringify({ version, summary: `${passed}/${ran} passed, ${skipped} skipped` }))
   bot.quit()
