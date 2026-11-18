@@ -290,6 +290,47 @@ class RefillMockBukkitTest {
     }
 
     @Test
+    void x6_logoutBeforeTheTaskAborts() {
+        inventory.setItem(0, new ItemStack(Material.COBBLESTONE, 1));
+        inventory.setItem(20, new ItemStack(Material.COBBLESTONE, 64));
+
+        place(EquipmentSlot.HAND);
+        inventory.setItem(0, null);
+        player.disconnect();
+        tick();
+
+        assertEmpty(inventory.getItem(0));
+        assertStack(Material.COBBLESTONE, 64, inventory.getItem(20));
+    }
+
+    @Test
+    void x8_anotherPluginWritingTheSlotInTheSameTickIsNeverOverwritten() {
+        inventory.setItem(0, new ItemStack(Material.COBBLESTONE, 1));
+        inventory.setItem(20, new ItemStack(Material.COBBLESTONE, 64));
+
+        place(EquipmentSlot.HAND);
+        inventory.setItem(0, new ItemStack(Material.DIRT, 1)); // another plugin, same tick
+        Map<Material, Integer> before = totals();
+        tick();
+
+        assertStack(Material.DIRT, 1, inventory.getItem(0));
+        assertStack(Material.COBBLESTONE, 64, inventory.getItem(20));
+        assertEquals(before, totals());
+    }
+
+    @Test
+    void x8_anotherPluginRestoringTheItemMeansNotUsedUp() {
+        inventory.setItem(0, new ItemStack(Material.COBBLESTONE, 1));
+        inventory.setItem(20, new ItemStack(Material.COBBLESTONE, 64));
+
+        place(EquipmentSlot.HAND); // an "infinite blocks" plugin puts the block straight back
+        tick();
+
+        assertStack(Material.COBBLESTONE, 1, inventory.getItem(0));
+        assertStack(Material.COBBLESTONE, 64, inventory.getItem(20));
+    }
+
+    @Test
     void x10_bothHandsRunOutInTheSameTick() {
         inventory.setItem(0, new ItemStack(Material.COBBLESTONE, 1));
         inventory.setItemInOffHand(new ItemStack(Material.BREAD, 1));

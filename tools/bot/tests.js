@@ -138,7 +138,7 @@ async function reset (heldSlot = 0) {
   cmd('/gamemode survival @s')
   cmd(`/fill -4 99 -4 8 99 4 stone`)
   cmd(`/fill -4 100 -4 8 103 4 air`)
-  cmd(`/tp @s ${ORIGIN.x + 0.5} ${ORIGIN.y} ${ORIGIN.z + 0.5} 0 90`)
+  cmd(`/execute in minecraft:overworld run tp @s ${ORIGIN.x + 0.5} ${ORIGIN.y} ${ORIGIN.z + 0.5} 0 90`)
   selectSlot(heldSlot)
   bot.quickBarSlot = heldSlot
   await sleep(700)
@@ -152,8 +152,9 @@ async function give (slots) {
     await sleep(700)
     return
   }
-  cmd('/gamemode creative @s')
-  await sleep(500)
+  // Commands can run a tick or more after later packets, so wait until the server has really switched game
+  // mode: creative-slot packets sent before that are rejected by the server.
+  await setGameMode('creative')
   for (const [bukkit, spec] of Object.entries(slots)) {
     const [id, amount] = spec.split(' ')
     const type = bot.registry.itemsByName[id]
@@ -165,8 +166,15 @@ async function give (slots) {
     bot.inventory.updateSlot(windowSlot(Number(bukkit)), item)
     await sleep(100)
   }
-  cmd('/gamemode survival @s')
-  await sleep(700)
+  await setGameMode('survival')
+  await sleep(500)
+}
+
+async function setGameMode (mode) {
+  cmd(`/gamemode ${mode} @s`)
+  for (let i = 0; i < 50 && bot.game.gameMode !== mode; i++) await sleep(100)
+  if (bot.game.gameMode !== mode) throw new Error(`game mode is still ${bot.game.gameMode}`)
+  await sleep(200)
 }
 
 /** Waits for the next chat/system message matching `pattern`. */
@@ -221,6 +229,25 @@ async function getHungry () {
   for (let i = 0; i < 100 && bot.food >= 18; i++) await sleep(100)
   cmd('/effect clear @s minecraft:hunger')
   await sleep(300)
+}
+
+/**
+ * Client mode (Folia): makes the server resend the whole inventory, so the bot's view is the server's truth.
+ * A container click with an outdated state id makes the server send its full state; clicking outside the
+ * window (-999) with an empty cursor changes nothing. Folia has no /execute if items, and its /clear count
+ * doesn't report real amounts.
+ */
+async function resync () {
+  bot._client.write('window_click', {
+    windowId: 0,
+    stateId: 0x7fffff,
+    slot: -999,
+    mouseButton: 0,
+    mode: 0,
+    changedSlots: [],
+    cursorItem: newComponents ? undefined : Item.toNotch(null)
+  })
+  await sleep(500)
 }
 
 // ---- assertions (asked from the server, so they don't depend on the bot decoding item data) ----
@@ -282,6 +309,7 @@ async function count (slots, predicate = '*') {
 const itemId = (spec) => spec.split(/[[ ]/)[0]
 
 async function serverTotals (names) {
+  if (!serverMode) await resync()
   const sum = {}
   for (const name of names) {
     sum[name] = (await count('container.*', name)) + (await count('weapon.offhand', name))
@@ -302,6 +330,7 @@ async function describeInventory (names) {
 }
 
 async function check (expected, beforeTotals, delta, names) {
+  if (!serverMode) await resync()
   const problems = []
   for (const [bukkit, want] of Object.entries(expected)) {
     const slot = itemSlot(Number(bukkit))
@@ -790,6 +819,27 @@ const tests = [
     expect: { 0: ['cobblestone', 64], 9: null },
     delta: { cobblestone: -1 }
   },
+  // ---- milestone 4 ----
+  // Same-tick context changes (X6 death/game mode/world, X8 another plugin writing the slot) are covered by
+  // MockBukkit: a command the bot sends doesn't reliably run in the same tick as its previous packet (Paper
+  // runs chat commands through a task queue), so as bot tests they would be flaky.
+  {
+    id: 'X12',
+    name: 'last block used 20,000 blocks from spawn (another Folia region): refilled',
+    slots: { 0: 'cobblestone 1', 9: 'cobblestone 64' },
+    setup: async () => {
+      cmd('/effect give @s minecraft:resistance 20 255 true')
+      cmd('/tp @s 20000.5 100 20000.5 0 90')
+      await sleep(2500) // the chunks there load with the player; /fill needs them loaded
+      cmd('/fill 19998 99 19998 20002 99 20002 stone')
+      cmd('/fill 19998 100 19998 20002 103 20002 air')
+      cmd('/tp @s 20000.5 100 20000.5 0 90')
+      await sleep(800)
+    },
+    act: async () => { placeOn(new Vec3(20001, 99, 20000)); await sleep(800) },
+    expect: { 0: ['cobblestone', 64], 9: null },
+    delta: { cobblestone: -1 }
+  },
   {
     id: 'K-offhand',
     name: 'offhand last block refills from storage',
@@ -821,10 +871,11 @@ async function run () {
   const only = process.env.BOT_ONLY ? new Set(process.env.BOT_ONLY.split(',')) : null
   for (const test of tests) {
     if (only && !only.has(test.id)) continue
-    if (test.needsComponents && !serverMode) {
+    if ((test.needsComponents || test.serverOnly) && !serverMode) {
       skipped++
       console.log(JSON.stringify({ version, id: test.id, skipped: true, name: test.name,
-        reason: 'needs item components, which the bot client cannot decode' }))
+        reason: test.needsComponents ? 'needs item components, which the bot client cannot decode'
+          : 'needs /item, which Folia disables' }))
       continue
     }
     let problems
