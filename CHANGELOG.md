@@ -23,4 +23,5 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - `autoitem.use` (everyone by default): without it, nothing is refilled.
 - A quiet pickup sound after each refill (`feedback.sound`), and optionally an action-bar message (`feedback.action-bar`, `messages.refilled`).
 - Pick block, choosing a villager trade and the recipe book in the same tick as a use don't cause a refill.
+- Supports Paper (and forks) 1.21 through 26.3, and Folia 1.21.4 through 26.3.
 - Folia support.

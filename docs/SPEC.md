@@ -26,11 +26,11 @@ The overriding requirement is **no duplication and no loss**. A refill only ever
 
 ## 2. Platform and compatibility
 
-- **Paper and its forks, Minecraft 1.21.1 through 26.x, and Folia.** The bot plays the full suite on Paper 1.21.1, 1.21.11 and 26.1.2 and Folia 1.21.11 and 26.1.2. Paper and Folia 26.2 and 26.3 are boot-tested, with the order of every event used checked in their server code (the bot can't join them yet).
-- Compile against `paper-api:1.21.1-R0.1-SNAPSHOT`, Java 21 bytecode. One jar for every version. A compile error means the API doesn't exist on 1.21.1: never bump the API to fix it.
+- **Paper and its forks, Minecraft 1.21 through 26.x, and Folia (1.21.4 through 26.x: Folia has no earlier 1.21 builds).** The bot plays the full suite on Paper 1.21, 1.21.1, 1.21.11 and 26.1.2 and Folia 1.21.11 and 26.1.2. Paper and Folia 26.2 and 26.3 are boot-tested, with the order of every event used checked in their server code (the bot can't join them yet). Why not lower: bStats (Nov 2026) shows 1.20.6 at 0.3% of servers and 1.20.4 at 1.0%, while 1.20.4 and older would need Java 17 bytecode and fallbacks for missing API.
+- Compile against `paper-api:1.21-R0.1-SNAPSHOT`, Java 21 bytecode. One jar for every version. A compile error means the API doesn't exist on 1.21: never bump the API to fix it.
 - `plugin.yml`: `api-version: '1.21'`, `folia-supported: true`.
 - Config strings are resolved with `Material.matchMaterial()` and item tags (`#minecraft:...` via `Bukkit.getTag(Tag.REGISTRY_ITEMS, …)`). Never `switch` on or `valueOf` Bukkit enums or registry types. An unknown name is a config warning and is skipped, so newer items work where they exist and nothing breaks where they don't.
-- Don't use the data component API (`use_remainder` etc.); it isn't in 1.21.1.
+- Don't use the data component API (`use_remainder` etc.); it isn't in 1.21.
 - Sounds are played as Adventure `Sound`s built from a key string, so unknown keys on older versions play nothing instead of throwing.
 - Adventure and MiniMessage come with Paper; nothing is shaded. Tests add MockBukkit (test scope only).
 
@@ -305,6 +305,11 @@ Each ends with `./gradlew build` green, `/test-server` on all versions, a commit
 2. **Buckets, throwables, right-click items, bows/crossbows.** Listeners and their K tests.
 3. **Tool breaking, full config, commands, toggle, worlds, feedback.** Remaining options, `/autoitem toggle|reload`, permissions, feedback service.
 4. **Adversarial pass.** `/exploit-audit` + `exploit-reviewer` over I1–I9 and every X test; fix findings; rerun the matrix on all servers.
+5. **Next update: Spigot and CraftBukkit** (about 7% of servers by bStats, Nov 2026). Not started. What it involves:
+   - Paper-only events need Spigot paths: `PlayerLaunchProjectileEvent` → `ProjectileLaunchEvent` (shooter is a player; hand unknown, both hands as now), `PlayerElytraBoostEvent` → the right-click record covers it, `EntityLoadCrossbowEvent` and `PlayerReadyArrowEvent` have **no** Spigot equivalent. A bow draws its arrow before `EntityShootBowEvent`, so on Spigot the last arrow in a hand needs another way to be seen (e.g. record the arrow hand when drawing starts via `PlayerInteractEvent` with a bow, verified next tick as usual). `PlayerPickItemEvent` and `PlayerRecipeBookClickEvent` have no Spigot equivalent either (their discards are lost; refills stay conserved).
+   - Scheduling: Folia's entity scheduler doesn't exist on Spigot; use the Bukkit scheduler there (one jar choosing at runtime).
+   - Text: Adventure isn't on Spigot; MiniMessage/Adventure would have to be shaded (or bungee-chat used) for messages, the action bar and the sound.
+   - Testing: Spigot test servers via BuildTools (run-paper doesn't download Spigot), and the bot suite on them.
 
 ## 8. Test matrix
 
@@ -376,7 +381,7 @@ Automated coverage: the unit and MockBukkit tests below, plus `tools/bot` (a Min
 | G11 | Q the last item; right-click the air with the last diamond and Q in the same tick (G11b) | No refill |
 | G12 | `/autoitem toggle`, disabled world (via config + `/autoitem reload`), creative mode | No refill |
 | G13 | Sound on by default; action bar after enabling it | As configured |
-| V1 | Boot on Paper 1.21.1, 1.21.11, 26.2 and Folia | Enables, no errors or warnings |
+| V1 | Boot on Paper 1.21, 1.21.1, 1.21.11, 26.1.2, 26.2, 26.3 and Folia 1.21.11, 26.1.2, 26.2, 26.3 | Enables, no errors or warnings |
 
 ### Exploit cases (G-style, run on Paper 26.2 and Folia)
 

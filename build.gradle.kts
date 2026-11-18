@@ -13,14 +13,14 @@ repositories {
 }
 
 dependencies {
-    // Compile against the OLDEST version we support (1.21.1). Newer servers (1.21.x, 26.x)
+    // Compile against the OLDEST version we support (1.21). Newer servers (1.21.x, 26.x)
     // load plugins built on older API; the reverse is not true. If something doesn't
-    // compile here, it doesn't exist on 1.21.1 servers either.
-    compileOnly("io.papermc.paper:paper-api:1.21.1-R0.1-SNAPSHOT")
+    // compile here, it doesn't exist on 1.21 servers either.
+    compileOnly("io.papermc.paper:paper-api:1.21-R0.1-SNAPSHOT")
 
     // Tests: pure planner/config tests plus MockBukkit integration tests.
     // MockBukkit is built against the paper-api version in its jar manifest (Paper-Version),
-    // so the test classpath uses that API, not the 1.21.1 compile API. Test scope only.
+    // so the test classpath uses that API, not the 1.21 compile API. Test scope only.
     testImplementation("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
     testImplementation("org.mockbukkit.mockbukkit:mockbukkit-v1.21:4.116.3")
     testImplementation(platform("org.junit:junit-bom:6.0.3"))
@@ -54,7 +54,8 @@ tasks {
 //
 //   ./gradlew runServer          -> Paper 26.2   (latest tested, Java 25)
 //   ./gradlew runServer1_21_11   -> Paper 1.21.11 (newest 1.21.x, Java 21)
-//   ./gradlew runServer1_21_1    -> Paper 1.21.1  (oldest supported, Java 21)
+//   ./gradlew runServer1_21_1    -> Paper 1.21.1  (Java 21)
+//   ./gradlew runServer1_21      -> Paper 1.21    (oldest supported, Java 21; Folia has no build before 1.21.4)
 //   ./gradlew runFolia           -> Folia 26.2    (Java 25)
 //   ./gradlew runFolia1_21_11    -> Folia 1.21.11 (Java 21)
 //   ./gradlew runServer26_1      -> Paper 26.1.2  (Java 25; the newest 26.x the tools/bot client can join)
@@ -74,6 +75,7 @@ val testServers = listOf(
     TestServer("runServer", "26.2", 25, "26.2"),
     TestServer("runServer1_21_11", "1.21.11", 21, "1.21.11"),
     TestServer("runServer1_21_1", "1.21.1", 21, "1.21.1"),
+    TestServer("runServer1_21", "1.21", 21, "1.21"),
     TestServer("runFolia", "26.2", 25, "folia-26.2", folia = true),
     TestServer("runFolia1_21_11", "1.21.11", 21, "folia-1.21.11", folia = true),
     TestServer("runServer26_1", "26.1.2", 25, "26.1.2"),

@@ -15,7 +15,8 @@ The developer is Pun (author `PunJarrr`). He runs a Paper server on Proxmox and 
 - Test servers. The first run downloads the server jar, and Java 25 for 26.x (Gradle toolchains handle this).
   - `./gradlew runServer` → Paper 26.2 in `run/26.2`
   - `./gradlew runServer1_21_11` → `run/1.21.11`
-  - `./gradlew runServer1_21_1` → `run/1.21.1` (the oldest supported version)
+  - `./gradlew runServer1_21_1` → `run/1.21.1`
+  - `./gradlew runServer1_21` → `run/1.21` (the oldest supported version; Folia starts at 1.21.4)
   - `./gradlew runFolia` → Folia 26.2 in `run/folia-26.2`
   - `./gradlew runServer26_3` / `runFolia26_3` → Paper / Folia 26.3 (newest; the bot can't join it yet)
   - `runServer26_1`, `runFolia26_1`, `runFolia1_21_11` → the other servers the bot plays on
@@ -25,13 +26,13 @@ The developer is Pun (author `PunJarrr`). He runs a Paper server on Proxmox and 
 
 ## Stack and compatibility
 
-- Java 21, Gradle Kotlin DSL, `compileOnly paper-api 1.21.1`. Adventure and MiniMessage come with Paper, so shade nothing.
-- Supports Minecraft 1.21.1 through 26.x on Paper, its forks, and **Folia** (`folia-supported: true`).
-- A compile error against the 1.21.1 API means that API doesn't exist on our oldest version. **Never bump paper-api to make something compile**; find a 1.21.1-safe way.
+- Java 21, Gradle Kotlin DSL, `compileOnly paper-api 1.21`. Adventure and MiniMessage come with Paper, so shade nothing.
+- Supports Minecraft 1.21 through 26.x on Paper and its forks, and **Folia** from 1.21.4 (`folia-supported: true`). Spigot/CraftBukkit is the next milestone (SPEC §7.5), not supported yet.
+- A compile error against the 1.21 API means that API doesn't exist on our oldest version. **Never bump paper-api to make something compile**; find a 1.21.1-safe way.
 - Tests run against the paper-api version MockBukkit is built for (1.21.11, see `build.gradle.kts`). Something that compiles in tests but not in `main` doesn't exist on 1.21.1.
-- Javadocs: https://jd.papermc.io/paper/1.21.11/ (1.21.1 is a subset of this; the compiler has the final say).
+- Javadocs: https://jd.papermc.io/paper/1.21.11/ (1.21 is a subset of this; the compiler has the final say).
 - `plugin.yml` stays on `api-version: '1.21'`.
-- Config strings go through `Material.matchMaterial()` and item tags. Never `valueOf` or `switch` on Bukkit enums or registry types. No data component API (not in 1.21.1).
+- Config strings go through `Material.matchMaterial()` and item tags. Never `valueOf` or `switch` on Bukkit enums or registry types. No data component API (not in 1.21).
 
 ## Anti-dupe rules (summary of SPEC §3; the spec wins if they differ)
 
