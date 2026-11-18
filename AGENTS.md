@@ -18,7 +18,7 @@ The developer is Pun (author `PunJarrr`). He runs a Paper server on Proxmox and 
   - `./gradlew runServer1_21_1` → `run/1.21.1` (the oldest supported version)
   - `./gradlew runFolia` → Folia 26.2 in `run/folia-26.2`
   - These are interactive servers. For automated boot checks use the `/test-server` skill, and never leave a server running.
-- `tools/bot/run.sh <task> <run dir> <version>` — the SPEC §8 G/X tests with a Mineflayer bot as the player, e.g. `tools/bot/run.sh runServer1_21_1 run/1.21.1 1.21.1`. Works on Paper 1.21.1 and 1.21.11 and Folia 1.21.11 (`runFolia1_21_11`); the bot can't join 26.x. It switches that run dir to offline mode and ops the bot. First time: `cd tools/bot && npm install --ignore-scripts`. Results go to `build/bot/<run dir>.jsonl`. Needs the Mac awake and on power: a sleeping machine freezes the server mid-test.
+- `tools/bot/run.sh <task> <run dir> <version>` — the SPEC §8 G/X tests with a Mineflayer bot as the player, e.g. `tools/bot/run.sh runServer1_21_1 run/1.21.1 1.21.1`. Works on Paper 1.21.1, 1.21.11 and 26.1.2 (`runServer26_1`, version `26.1`) and Folia 1.21.11 and 26.1.2 (`runFolia1_21_11`, `runFolia26_1`); the bot can't join 26.2. It switches that run dir to offline mode and ops the bot. First time: `cd tools/bot && npm install --ignore-scripts`. Results go to `build/bot/<run dir>.jsonl`. Needs the Mac awake and on power: a sleeping machine freezes the server mid-test.
 - If `./gradlew` gives "permission denied", run `chmod +x gradlew`. If it can't find Java, set `JAVA_HOME` to a JDK 21.
 
 ## Stack and compatibility
