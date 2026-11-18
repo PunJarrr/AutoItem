@@ -26,7 +26,7 @@ The overriding requirement is **no duplication and no loss**. A refill only ever
 
 ## 2. Platform and compatibility
 
-- **Paper and its forks, Minecraft 1.21.1 through 26.x, and Folia.** Tested on Paper 1.21.1, 1.21.11 and 26.2, plus the newest Folia build run-paper can download.
+- **Paper and its forks, Minecraft 1.21.1 through 26.x, and Folia.** The bot plays the full suite on Paper 1.21.1, 1.21.11 and 26.1.2 and Folia 1.21.11 and 26.1.2. Paper and Folia 26.2 and 26.3 are boot-tested, with the order of every event used checked in their server code (the bot can't join them yet).
 - Compile against `paper-api:1.21.1-R0.1-SNAPSHOT`, Java 21 bytecode. One jar for every version. A compile error means the API doesn't exist on 1.21.1: never bump the API to fix it.
 - `plugin.yml`: `api-version: '1.21'`, `folia-supported: true`.
 - Config strings are resolved with `Material.matchMaterial()` and item tags (`#minecraft:...` via `Bukkit.getTag(Tag.REGISTRY_ITEMS, …)`). Never `switch` on or `valueOf` Bukkit enums or registry types. An unknown name is a config warning and is skipped, so newer items work where they exist and nothing breaks where they don't.

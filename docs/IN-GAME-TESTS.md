@@ -40,3 +40,4 @@ Everything here passed on 26.1.2 with the bot; this just confirms 26.2.
 - [ ] **X6:** use the last block and die at the same moment, with `/gamerule doImmediateRespawn true` and false, `keepInventory` on and off: no refill after respawn.
 - [ ] **X11:** only if your server runs Multiverse-Inventories or PerWorldInventory: use the last item and go through a portal at once. Nothing moves in either world's inventory.
 - [ ] **Folia 26.2:** `./gradlew runFolia`, then G1, G5 and G8 from section 1.
+- [ ] **Paper 26.3** (`./gradlew runServer26_3`) and **Folia 26.3** (`./gradlew runFolia26_3`): G1, G3, G5, G8 and G9 from section 1, with a 26.3 client.
