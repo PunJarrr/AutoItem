@@ -29,3 +29,15 @@ CLAUDE.local.md
 
 # tools/bot (Mineflayer test client)
 tools/bot/node_modules/
+
+# Secrets: never commit tokens or keys. Publish tokens (Modrinth, Hangar) belong in
+# GitHub → Settings → Secrets and variables → Actions, or in ~/.gradle/gradle.properties.
+.env
+.env.*
+*.pem
+*.key
+*.jks
+*.keystore
+*.p12
+local.properties
+secrets.properties
