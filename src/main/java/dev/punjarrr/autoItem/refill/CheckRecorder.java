@@ -10,9 +10,12 @@ import org.bukkit.plugin.Plugin;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Predicate;
 
 /**
  * Where listeners report "this slot may have just run out". Records a {@link Check}, at most one per
@@ -49,19 +52,54 @@ public final class CheckRecorder {
     public void record(Player player, @Nullable EquipmentSlot hand, @Nullable ItemStack eventItem, Trigger trigger) {
         int slot = slotFor(player, hand);
         if (slot >= 0) {
-            recordSlot(player, slot, eventItem, trigger);
+            recordSlot(player, slot, similarTo(eventItem), trigger, Set.of());
+        }
+    }
+
+    /** For events that don't say which hand was used: records each hand holding the last such item. */
+    public void recordBothHands(Player player, @Nullable ItemStack eventItem, Trigger trigger) {
+        Predicate<ItemStack> matches = similarTo(eventItem);
+        recordSlot(player, player.getInventory().getHeldItemSlot(), matches, trigger, Set.of());
+        recordSlot(player, RefillPlanner.OFFHAND_SLOT, matches, trigger, Set.of());
+    }
+
+    /** Matches items similar to {@code eventItem}; nothing if it is null or empty. */
+    public static Predicate<ItemStack> similarTo(@Nullable ItemStack eventItem) {
+        return eventItem == null || eventItem.isEmpty() ? item -> false : item -> item.isSimilar(eventItem);
+    }
+
+    /**
+     * Forgets this tick's pending check for a slot because something other than a trigger changed it (a drop,
+     * a hand swap, a totem pop). Without this, a check recorded by a use that didn't consume anything (the
+     * right-click catch-all, a bow starting to draw) would refill a slot the player emptied some other way.
+     * Touches only the recorder's own state, never the inventory.
+     */
+    public void discard(Player player, int slot) {
+        Batch batch = batches.get(player.getUniqueId());
+        if (batch != null) {
+            batch.remove(slot);
+        }
+    }
+
+    /** Forgets all of this tick's pending checks for a player (an inventory click or drag). */
+    public void discardAll(Player player) {
+        Batch batch = batches.get(player.getUniqueId());
+        if (batch != null) {
+            batch.clear();
         }
     }
 
     /**
-     * Records a check if the slot, read now (before vanilla decrements it), holds exactly one item similar
-     * to {@code eventItem} (any item if {@code eventItem} is null).
+     * Records a check if the slot, read now (before vanilla decrements it), holds exactly one item that
+     * {@code matches}. {@code extraRemainders} (material keys) are allowed in the slot on top of the
+     * remainders table, e.g. the filled bucket a bucket event reports.
+     *
+     * <p>Records even when {@code trigger} is turned off: the switch is applied at task time to the merged
+     * check, so a disabled specific trigger also suppresses the right-click catch-all for the same use.
      */
-    public void recordSlot(Player player, int slot, @Nullable ItemStack eventItem, Trigger trigger) {
+    public void recordSlot(Player player, int slot, Predicate<ItemStack> matches, Trigger trigger,
+                           Set<String> extraRemainders) {
         RefillSettings settings = config.settings();
-        if (!settings.triggers().contains(trigger)) {
-            return;
-        }
         PlayerState state = states.of(player);
         if (!Gates.allows(state, settings)) {
             return;
@@ -70,15 +108,16 @@ public final class CheckRecorder {
         if (live == null || live.isEmpty() || live.getAmount() != 1) {
             return;
         }
-        if (eventItem != null && !live.isSimilar(eventItem)) {
+        if (!matches.test(live)) {
             return;
         }
         BukkitItemView snapshot = BukkitItemView.of(live);
         if (snapshot == null) {
             return;
         }
-        Check check = new Check(slot, snapshot, settings.remainders().allowedFor(snapshot.material()),
-                EnumSet.of(trigger), state.worldId(), state.gameMode());
+        Set<String> remainders = new HashSet<>(settings.remainders().allowedFor(snapshot.material()));
+        remainders.addAll(extraRemainders);
+        Check check = new Check(slot, snapshot, remainders, EnumSet.of(trigger), state.worldId(), state.gameMode());
         enqueue(player, check);
     }
 

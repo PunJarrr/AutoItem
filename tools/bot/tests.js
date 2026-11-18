@@ -75,8 +75,37 @@ function placeOn (below, hand = 0) {
   predictOneUsed(hand)
 }
 
-function useItem (hand = 0) {
-  bot._client.write('use_item', { hand, sequence: sequence++, rotation: { x: 0, y: 90 } })
+/** Right-click with an item, looking in a direction (Minecraft yaw/pitch in degrees; pitch 90 = down). */
+function useItem (hand = 0, yaw = 0, pitch = 90) {
+  bot._client.write('use_item', { hand, sequence: sequence++, rotation: { x: yaw, y: pitch } })
+}
+
+/** Right-click with an item while looking at `target` (a point), as buckets and boats need. */
+async function useItemAt (target, hand = 0) {
+  await bot.lookAt(target, true)
+  const eye = bot.entity.position.offset(0, bot.entity.eyeHeight, 0)
+  const d = target.minus(eye)
+  const yaw = -Math.atan2(d.x, d.z) * 180 / Math.PI
+  const pitch = -Math.atan2(d.y, Math.hypot(d.x, d.z)) * 180 / Math.PI
+  useItem(hand, yaw, pitch)
+}
+
+/** Hold right-click for `ms`, then release (drawing a bow, charging a crossbow or trident). */
+async function holdUse (ms, hand = 0) {
+  useItem(hand, -90, -10)
+  await sleep(ms)
+  dig(5) // release
+}
+
+/** Right-click the nearest entity of a type with the main hand. */
+async function useOnEntity (type) {
+  let entity = null
+  for (let i = 0; i < 30 && !entity; i++) {
+    entity = bot.nearestEntity((e) => e.name === type)
+    if (!entity) await sleep(100)
+  }
+  if (!entity) throw new Error(`no ${type} near the bot`)
+  bot.activateEntity(entity)
 }
 
 function dig (status) {
@@ -90,7 +119,7 @@ const selectSlot = (slot) => bot._client.write('held_item_slot', { slotId: slot 
 
 async function reset (heldSlot = 0) {
   cmd('/clear @s')
-  cmd('/kill @e[type=item]')
+  cmd('/kill @e[type=!player]')
   cmd('/effect clear @s')
   cmd('/gamemode survival @s')
   cmd(`/fill -4 99 -4 8 99 4 stone`)
@@ -200,6 +229,18 @@ async function serverTotals (names) {
   return sum
 }
 
+/** Where the test's items are now, for failure messages: 'slot:count name, ...'. */
+async function describeInventory (names) {
+  const parts = []
+  for (const bukkit of [...Array(36).keys(), 40]) {
+    for (const name of names) {
+      const n = await count(itemSlot(bukkit), name)
+      if (n > 0) parts.push(`${bukkit}:${n} ${name}`)
+    }
+  }
+  return parts.join(', ') || 'none of them'
+}
+
 async function check (expected, beforeTotals, delta, names) {
   const problems = []
   for (const [bukkit, want] of Object.entries(expected)) {
@@ -220,12 +261,14 @@ async function check (expected, beforeTotals, delta, names) {
     const want = beforeTotals[name] + (delta[name] ?? 0)
     if (after[name] !== want) problems.push(`total ${name}: want ${want}, got ${after[name]}`)
   }
+  if (problems.length > 0) problems.push(`inventory now: ${await describeInventory(names)}`)
   return problems
 }
 
 // ---- the tests ----
 
 const P = (x, z) => new Vec3(x, 99, z) // a floor block to place on
+const TOP = (x, z) => new Vec3(x + 0.5, 100, z + 0.5) // the top face of that floor block
 
 const tests = [
   {
@@ -339,6 +382,213 @@ const tests = [
     expect: { 0: ['torch', 10], 40: null, 9: null },
     delta: { torch: -2 }
   },
+  // ---- milestone 2: buckets ----
+  {
+    id: 'G5a',
+    name: 'last water bucket emptied: refilled, empty bucket moves out',
+    slots: { 0: 'water_bucket 1', 12: 'water_bucket 1' },
+    act: async () => { await useItemAt(TOP(2, 0)); await sleep(800) },
+    expect: { 0: ['water_bucket', 1], 12: null },
+    delta: { water_bucket: -1, bucket: 1 }
+  },
+  {
+    id: 'G5b',
+    name: 'last empty bucket filled: another empty bucket, filled one moves out',
+    slots: { 0: 'bucket 1', 9: 'bucket 3' },
+    setup: async () => { cmd('/setblock 2 99 0 water'); await sleep(300) },
+    act: async () => { await useItemAt(new Vec3(2.5, 99.8, 0.5)); await sleep(800) },
+    expect: { 0: ['bucket', 3], 9: null },
+    delta: { bucket: -1, water_bucket: 1 }
+  },
+  // ---- milestone 2: throwables ----
+  ...['snowball', 'egg', 'ender_pearl', 'experience_bottle', 'wind_charge'].map((item) => ({
+    id: `G6-${item}`,
+    name: `last ${item} thrown: refilled`,
+    slots: { 0: `${item} 1`, 9: `${item} 8` },
+    act: async () => { useItem(0, -90, -60); await sleep(800) },
+    expect: { 0: [item, 8], 9: null },
+    delta: { [item]: -1 }
+  })),
+  {
+    id: 'G6-splash',
+    name: 'last Swiftness splash potion thrown: refilled only from Swiftness splash',
+    needsComponents: true,
+    slots: {
+      0: 'splash_potion[potion_contents={potion:"minecraft:swiftness"}] 1',
+      10: 'splash_potion[potion_contents={potion:"minecraft:slowness"}] 1',
+      11: 'lingering_potion[potion_contents={potion:"minecraft:swiftness"}] 1',
+      14: 'splash_potion[potion_contents={potion:"minecraft:swiftness"}] 1'
+    },
+    act: async () => { useItem(0, -90, -60); await sleep(800) },
+    expect: {
+      0: ['splash_potion[potion_contents={potion:"minecraft:swiftness"}]', 1],
+      10: ['splash_potion[potion_contents={potion:"minecraft:slowness"}]', 1],
+      11: ['lingering_potion', 1],
+      14: null
+    },
+    delta: { splash_potion: -1 }
+  },
+  // ---- milestone 2: right-click items ----
+  {
+    id: 'G7-spawn-egg',
+    name: 'last spawn egg: refilled',
+    slots: { 0: 'cow_spawn_egg 1', 9: 'cow_spawn_egg 2' },
+    act: async () => { placeOn(P(2, 0)); await sleep(800) },
+    expect: { 0: ['cow_spawn_egg', 2], 9: null },
+    delta: { cow_spawn_egg: -1 }
+  },
+  {
+    id: 'G7-bone-meal',
+    name: 'last bone meal on grass: refilled',
+    slots: { 0: 'bone_meal 1', 9: 'bone_meal 5' },
+    setup: async () => { cmd('/setblock 2 99 0 grass_block'); await sleep(300) },
+    act: async () => { placeOn(P(2, 0)); await sleep(800) },
+    expect: { 0: ['bone_meal', 5], 9: null },
+    delta: { bone_meal: -1 }
+  },
+  {
+    id: 'G7-firework',
+    name: 'last firework rocket used on the ground: refilled',
+    slots: { 0: 'firework_rocket 1', 9: 'firework_rocket 4' },
+    act: async () => { placeOn(P(2, 0)); await sleep(800) },
+    expect: { 0: ['firework_rocket', 4], 9: null },
+    delta: { firework_rocket: -1 }
+  },
+  {
+    id: 'G7-end-crystal',
+    name: 'last end crystal on obsidian: refilled',
+    slots: { 0: 'end_crystal 1', 9: 'end_crystal 2' },
+    setup: async () => { cmd('/setblock 2 99 0 obsidian'); await sleep(300) },
+    act: async () => { placeOn(P(2, 0)); await sleep(800) },
+    expect: { 0: ['end_crystal', 2], 9: null },
+    delta: { end_crystal: -1 }
+  },
+  {
+    id: 'G7-item-frame',
+    name: 'last item frame: refilled',
+    slots: { 0: 'item_frame 1', 9: 'item_frame 3' },
+    act: async () => { placeOn(P(2, 0)); await sleep(800) },
+    expect: { 0: ['item_frame', 3], 9: null },
+    delta: { item_frame: -1 }
+  },
+  {
+    id: 'G7-boat',
+    name: 'last boat: refilled',
+    slots: { 0: 'oak_boat 1', 9: 'oak_boat 1' },
+    act: async () => { await useItemAt(TOP(2, 0)); await sleep(800) },
+    expect: { 0: ['oak_boat', 1], 9: null },
+    delta: { oak_boat: -1 }
+  },
+  {
+    id: 'G7-feed-cow',
+    name: 'last wheat fed to a cow: refilled',
+    slots: { 0: 'wheat 1', 9: 'wheat 6' },
+    setup: async () => { cmd('/summon cow 2 100 0 {NoAI:1b}'); await sleep(800) },
+    act: async () => { await useOnEntity('cow'); await sleep(800) },
+    expect: { 0: ['wheat', 6], 9: null },
+    delta: { wheat: -1 }
+  },
+  // ---- milestone 2: bows ----
+  {
+    id: 'G8-bow',
+    name: 'last arrow in the offhand shot from a bow: refilled',
+    slots: { 0: 'bow 1', 40: 'arrow 1', 9: 'arrow 32' },
+    act: async () => { await holdUse(1200); await sleep(800) },
+    expect: { 0: ['bow', 1], 40: ['arrow', 32], 9: null },
+    delta: { arrow: -1 }
+  },
+  {
+    id: 'G8-tipped',
+    name: 'last poison tipped arrow: refilled only from poison arrows',
+    needsComponents: true,
+    slots: {
+      0: 'bow 1',
+      40: 'tipped_arrow[potion_contents={potion:"minecraft:poison"}] 1',
+      9: 'tipped_arrow[potion_contents={potion:"minecraft:harming"}] 5',
+      10: 'arrow 5',
+      11: 'tipped_arrow[potion_contents={potion:"minecraft:poison"}] 7'
+    },
+    act: async () => { await holdUse(1200); await sleep(800) },
+    expect: {
+      40: ['tipped_arrow[potion_contents={potion:"minecraft:poison"}]', 7],
+      9: ['tipped_arrow[potion_contents={potion:"minecraft:harming"}]', 5],
+      10: ['arrow', 5],
+      11: null
+    },
+    delta: { tipped_arrow: -1 }
+  },
+  {
+    id: 'G8-crossbow',
+    name: 'last rocket in the offhand loaded into a crossbow: refilled',
+    slots: { 0: 'crossbow 1', 40: 'firework_rocket 1', 9: 'firework_rocket 3' },
+    act: async () => { await holdUse(1700); await sleep(800) },
+    expect: { 0: ['crossbow', 1], 40: ['firework_rocket', 3], 9: null },
+    delta: { firework_rocket: -1 }
+  },
+  // ---- milestone 2: things that must not refill ----
+  {
+    id: 'G10-trident',
+    name: 'thrown trident: no refill (damageable, comes back with Loyalty)',
+    slots: { 0: 'trident 1', 9: 'trident 1' },
+    act: async () => { await holdUse(800); await sleep(800) },
+    expect: { 0: null, 9: ['trident', 1] },
+    delta: { trident: -1 }
+  },
+  {
+    id: 'G10-helmet',
+    name: 'helmet equipped by right-click: no refill',
+    slots: { 0: 'iron_helmet 1', 9: 'iron_helmet 1' },
+    act: async () => { useItem(0); await sleep(800) },
+    expect: { 0: null, 9: ['iron_helmet', 1] },
+    delta: { iron_helmet: -1 }
+  },
+  // ---- found by the exploit review: refills after something other than a trigger emptied the slot ----
+  {
+    id: 'X13-totem',
+    name: 'holding right-click with a totem in the offhand, then a totem pop: no refill',
+    slots: { 40: 'totem_of_undying 1', 9: 'totem_of_undying 1', 10: 'totem_of_undying 1' }, // totems don't stack
+    act: async () => {
+      // Right-click every tick for a second, so a check is pending in whichever tick the damage lands.
+      for (let i = 0; i < 20; i++) {
+        useItem(1)
+        if (i === 10) cmd('/damage @s 1000 minecraft:generic')
+        await sleep(50)
+      }
+      await sleep(800)
+    },
+    expect: { 40: null, 9: ['totem_of_undying', 1], 10: ['totem_of_undying', 1] },
+    delta: { totem_of_undying: -1 }
+  },
+  {
+    id: 'G11b',
+    name: 'right-click the air with the last diamond, then Q in the same tick: no refill',
+    slots: { 0: 'diamond 1', 9: 'diamond 5' },
+    act: async () => { useItem(0); dropOne(); await sleep(800) },
+    expect: { 0: null, 9: ['diamond', 5] },
+    delta: { diamond: -1 }
+  },
+  {
+    id: 'X1b',
+    name: 'right-click the air with the last diamond, then F in the same tick: no refill',
+    slots: { 0: 'diamond 1', 9: 'diamond 5' },
+    act: async () => { useItem(0); swapHands(); await sleep(800) },
+    expect: { 0: null, 40: ['diamond', 1], 9: ['diamond', 5] },
+    delta: {}
+  },
+  {
+    id: 'X4',
+    name: 'right-click the air with the last diamond, then click it onto the cursor (no inventory open): no refill',
+    slots: { 0: 'diamond 1', 9: 'diamond 5' },
+    act: async () => {
+      useItem(0)
+      bot.clickWindow(36, 0, 0).catch(() => {}) // hotbar 0 -> cursor, written at once
+      await sleep(800)
+      bot.clickWindow(36, 0, 0).catch(() => {}) // put it back so the totals can be counted
+      await sleep(500)
+    },
+    expect: { 0: ['diamond', 1], 9: ['diamond', 5] },
+    delta: {}
+  },
   {
     id: 'K-offhand',
     name: 'offhand last block refills from storage',
@@ -365,7 +615,10 @@ async function run () {
   console.log(JSON.stringify({ version, mode: serverMode ? 'server' : 'client' }))
   let passed = 0
   let skipped = 0
+  // BOT_ONLY=G1,X13-totem runs just those tests.
+  const only = process.env.BOT_ONLY ? new Set(process.env.BOT_ONLY.split(',')) : null
   for (const test of tests) {
+    if (only && !only.has(test.id)) continue
     if (test.needsComponents && !serverMode) {
       skipped++
       console.log(JSON.stringify({ version, id: test.id, skipped: true, name: test.name,
@@ -388,7 +641,7 @@ async function run () {
     if (pass) passed++
     console.log(JSON.stringify({ version, id: test.id, pass, name: test.name, problems }))
   }
-  const ran = tests.length - skipped
+  const ran = (only ? tests.filter((t) => only.has(t.id)).length : tests.length) - skipped
   console.log(JSON.stringify({ version, summary: `${passed}/${ran} passed, ${skipped} skipped` }))
   bot.quit()
   await sleep(500)

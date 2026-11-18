@@ -257,12 +257,35 @@ class RefillPlannerTest {
 
     @Test
     void u17_aMergedCheckRunsIfAnyOfItsTriggersIsOn() {
-        Check merged = check(0, FakeItem.of("cobblestone", 1), Trigger.BLOCK_PLACE)
-                .merge(check(0, FakeItem.of("cobblestone", 1), Trigger.RIGHT_CLICK));
+        Check merged = check(0, FakeItem.of("water_bucket", 1), Trigger.BUCKETS)
+                .merge(check(0, FakeItem.of("water_bucket", 1), Trigger.CONSUME));
+        RefillSettings settings = new RefillSettings(true, EnumSet.of(Trigger.CONSUME), true, Set.of(),
+                Set.of(), REMAINDERS);
+        assertRefill(20, 0, planner.plan(merged, slotsWith(20, FakeItem.of("water_bucket", 1)), settings,
+                survival()));
+    }
+
+    @Test
+    void u17_rightClickNeverOverridesADisabledSpecificTrigger() {
+        // Placing a block fires PlayerInteractEvent too. With block-place off, the right-click catch-all
+        // must not refill placed blocks.
+        Check merged = check(0, FakeItem.of("cobblestone", 1), Trigger.RIGHT_CLICK)
+                .merge(check(0, FakeItem.of("cobblestone", 1), Trigger.BLOCK_PLACE));
+        assertEquals(Set.of(Trigger.BLOCK_PLACE), merged.triggers());
         RefillSettings settings = new RefillSettings(true, EnumSet.of(Trigger.RIGHT_CLICK), true, Set.of(),
                 Set.of(), REMAINDERS);
-        assertRefill(20, 0, planner.plan(merged, slotsWith(20, FakeItem.of("cobblestone", 64)), settings,
+        assertSkip(Reason.DISABLED, planner.plan(merged, slotsWith(20, FakeItem.of("cobblestone", 64)), settings,
                 survival()));
+    }
+
+    @Test
+    void u4_filledBucketReportedByTheEventIsAnAllowedRemainder() {
+        // Catching a fish in the last water bucket: the cod bucket comes from the event, not the table.
+        Check catchFish = new Check(0, FakeItem.of("water_bucket", 1), Set.of(key("bucket"), key("cod_bucket")),
+                EnumSet.of(Trigger.BUCKETS), WORLD, "SURVIVAL");
+        ItemView[] slots = slotsWith(20, FakeItem.of("water_bucket", 1));
+        slots[0] = FakeItem.of("cod_bucket", 1);
+        assertRefill(20, 0, plan(catchFish, slots));
     }
 
     @Nested

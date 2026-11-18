@@ -15,6 +15,16 @@ public final class Batch {
         bySlot.merge(check.slot(), check, Check::merge);
     }
 
+    /** Forgets the check for one slot, if any. */
+    public void remove(int slot) {
+        bySlot.remove(slot);
+    }
+
+    /** Forgets every check. */
+    public void clear() {
+        bySlot.clear();
+    }
+
     public List<Check> checks() {
         return List.copyOf(bySlot.values());
     }

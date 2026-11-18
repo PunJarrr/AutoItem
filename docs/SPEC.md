@@ -56,10 +56,12 @@ The overriding requirement is **no duplication and no loss**. A refill only ever
 ### Observe, then verify next tick
 
 1. **Listeners never change inventories and never cancel or un-cancel events.** They only record checks.
-2. A listener records a check only if the target slot, read at event time, holds an item similar to the event's item **with amount 1**. Every trigger fires before vanilla decrements the stack (verified per event in the K and G tests), so amount 1 means "this use takes the last one". Larger stacks are never recorded. This is also why "use the second-to-last item, then press Q" never refills.
+2. A listener records a check only if the target slot, read at event time, holds an item similar to the event's item **with amount 1**. Every event used fires before vanilla decrements the stack (checked in the Paper 1.21.1 and 26.2 server code and by the bot tests), so amount 1 means "this use takes the last one". Larger stacks are never recorded. This is also why "use the second-to-last item, then press Q" never refills. Bows are the exception that proves the rule: a bow draws its arrow out of the inventory *before* `EntityShootBowEvent`, so the bow trigger uses `PlayerReadyArrowEvent`, which fires first.
+   Listeners record even when their trigger is switched off; the switch is applied at task time to the merged check (step 4), so a disabled specific trigger also silences the right-click catch-all for the same use.
 3. **Over-recording is safe, under-recording only misses a refill.** Where an event doesn't say which hand was used, record both hands; the task decides.
-4. **Dedup:** at most one check per player per slot per tick. If several events record the same slot in one tick (`BlockPlaceEvent` + `PlayerInteractEvent`), keep the first snapshot, union the allowed remainders, and the kind becomes `TOOL_BREAK` if any record was.
-5. One tick later, one task per player drains the batch. Checks run main hand first, then offhand. **Each check re-reads the live inventory**, after the previous check's refill.
+4. **Dedup:** at most one check per player per slot per tick. If several events record the same slot in one tick (`BlockPlaceEvent` + `PlayerInteractEvent`), keep the first snapshot, union the allowed remainders and triggers, and the kind becomes `TOOL_BREAK` if any record was. `right-click` is the catch-all (`PlayerInteractEvent` also fires for placing, buckets and throws): next to any more specific trigger it is dropped, so with `block-place: false` placing the last block never refills through right-click.
+5. **Discards:** if something other than a trigger empties or swaps a hand in the same tick, the pending check for that slot is dropped: a drop (`PlayerDropItemEvent`, the held slot), a hand swap (`PlayerSwapHandItemsEvent`, both hands), an inventory click or drag (`InventoryClickEvent`/`InventoryDragEvent`, every check for that player, including clicks a hacked client sends with no inventory open) and a totem pop (`EntityResurrectEvent`, the totem's hand). All at `MONITOR`, `ignoreCancelled = true`, and they only remove recorder state. Without this, a check from a use that consumed nothing (the right-click catch-all, a bow starting to draw) refills a slot the player emptied another way: right-clicking a totem every tick and then popping it would be an auto-totem.
+6. One tick later, one task per player drains the batch. Checks run main hand first, then offhand. **Each check re-reads the live inventory**, after the previous check's refill.
 
 ### The decision (pure function)
 
@@ -125,13 +127,14 @@ All listeners are `@EventHandler(priority = MONITOR, ignoreCancelled = true)`, e
 |---|---|---|---|
 | `block-place` | `BlockPlaceEvent` (covers `BlockMultiPlaceEvent`) | `getHand()` | Snapshot is `getItemInHand()`, so redstone dust matches dust, seeds match seeds. Powder snow bucket placement leaves a bucket via the remainder table. |
 | `consume` | `PlayerItemConsumeEvent` | `getHand()` | Food, potions, honey, milk, stews, ominous bottles. |
-| `buckets` | `PlayerBucketEmptyEvent`, `PlayerBucketFillEvent`, `PlayerBucketEntityEvent` | `getHand()` | Emptying: remainder is a bucket. Filling the last empty bucket: the filled bucket is the remainder and gets moved out, and the slot gets another empty bucket. |
+| `buckets` | `PlayerBucketEmptyEvent`, `PlayerBucketFillEvent`, `PlayerBucketEntityEvent` | `getHand()` | Emptying: remainder is a bucket. Filling the last empty bucket: the filled bucket is the remainder and gets moved out, and the slot gets another empty bucket. The filled item the event reports (`getItemStack()`, `getEntityBucket()`) is also allowed as the remainder, so catching a fish in the last water bucket moves the fish bucket out and refills the water bucket. |
 | `throwables` | `PlayerLaunchProjectileEvent` | both hands | Only when `shouldConsume()`. Snowballs, eggs, ender pearls, splash/lingering potions, experience bottles, wind charges. Tridents are damageable, so rule 6 skips them (they come back with Loyalty). |
-| `right-click` | `PlayerInteractEvent`, `PlayerInteractEntityEvent`, `EntityPlaceEvent`, `HangingPlaceEvent`, `PlayerArmorStandManipulateEvent`, `PlayerElytraBoostEvent` | `getHand()` | Spawn eggs, boats, minecarts, bone meal, firework rockets, end crystals, ender eyes, item frames, paintings, armor stands, feeding/breeding, name tags, leads, cauldrons, filling glass bottles and bowls. Items whose `Material#getEquipmentSlot()` is an armor slot are not recorded (right-click equips them). |
-| `bows` | `EntityShootBowEvent`, `EntityLoadCrossbowEvent` | the hand that is **not** the weapon's | Bow: only when `shouldConsumeItem()`, and the other hand holds an item similar to `getConsumable()`. Crossbow: ammo is used at load time, so record the other hand on load when `shouldConsumeItem()`. Tipped arrows match exactly (isSimilar). Arrows pulled from storage slots aren't a hand slot, so nothing to refill. |
+| `right-click` | `PlayerInteractEvent`, `PlayerInteractEntityEvent`, `EntityPlaceEvent`, `HangingPlaceEvent`, `PlayerArmorStandManipulateEvent`, `PlayerElytraBoostEvent` | `getHand()` | Spawn eggs, boats, minecarts, bone meal, firework rockets, end crystals, ender eyes, item frames, paintings, armor stands, feeding/breeding, name tags, leads, cauldrons, filling glass bottles and bowls. Items whose `Material#getEquipmentSlot()` isn't a hand are not recorded (right-click equips them). `PlayerInteractEvent` uses `useItemInHand() != DENY` and right-click actions only. |
+| `bows` | `PlayerReadyArrowEvent` | both hands (the weapon's hand never matches its ammo) | Fires while a bow or crossbow picks its ammo (bow: drawing starts and on release; crossbow: on load), before anything is taken from the inventory. `EntityShootBowEvent` comes after a bow has drawn its arrow, too late to see the last one. It names the exact ammo, so tipped arrows match exactly and an unrelated item in the other hand is never recorded. Infinity leaves the arrow, so the check finds it still there. Ammo pulled from storage slots isn't in a hand, so nothing to refill. |
 | `tool-break` (default **off**) | `PlayerItemBreakEvent` | both hands | Record a `TOOL_BREAK` check for each hand slot holding the broken item's material. Armor slots are ignored in v1. |
 
-- Dropping with Q, inventory clicks, hand swaps (F) and hotbar scrolling never record anything.
+- Dropping with Q, inventory clicks, hand swaps (F) and hotbar scrolling never record anything, and the first three discard what was recorded (§3 step 5).
+- Known gap: on 26.x a plugin or datapack item with an `equippable` component on a non-armor material isn't recognised as "equips on right-click" (1.21.1 has no API to see components), so equipping the last one refills the hand. Conserved; accepted.
 - Each listener is a thin adapter: find the target slot(s), build the snapshot, call `CheckRecorder.record(...)`.
 
 ### 4.2 Matching and source slots
@@ -323,7 +326,7 @@ Each ends with `./gradlew build` green, `/test-server` on all versions, a commit
 | U14 | Tipped arrows of different effects | Only the identical one |
 | U15 | Enchanted / named block or food | Only identical |
 | U16 | Ignored by material; by tag | Skip `IGNORED` |
-| U17 | Each trigger disabled at task time | `DISABLED` |
+| U17 | Each trigger disabled at task time; a merged check runs if any trigger is on; right-click merged with a disabled `block-place` | `DISABLED`; refill; `DISABLED` |
 | U18 | Each gate (offline, dead, creative, spectator, disabled world, toggle off, no permission, master off) | `GATE` |
 | U19 | World or game mode changed since the event | `CONTEXT_CHANGED` |
 | U20 | `NORMAL` check with damageable snapshot (trident, shears) | `DAMAGEABLE` |
@@ -334,7 +337,7 @@ Each ends with `./gradlew build` green, `/test-server` on all versions, a commit
 | U25 | Tool break, several candidates, same enchants | Main before hotbar, then least damaged |
 | U26 | Tool break with `tool-break: false` | `DISABLED` |
 | U27 | Remainders inverse: BUCKET → all filled buckets; GLASS_BOTTLE → POTION, HONEY_BOTTLE | As listed |
-| U28 | Dedup: two records same slot same tick | One check, first snapshot, union of remainders, TOOL_BREAK wins |
+| U28 | Dedup: two records same slot same tick; discard one slot / all | One check, first snapshot, union of remainders, TOOL_BREAK wins, right-click dropped next to a specific trigger; discarded checks are gone |
 | U29 | Two checks (main + offhand) needing the same source material, only one source | Main hand gets it, offhand `NO_SOURCE` (the refilled main hand is the held slot) |
 | U30 | Config: invalid values, unknown materials, unknown tags, `NONE`, missing keys, broken MiniMessage | Warnings with key path; defaults |
 | U31 | Conservation property: random inventories × random checks, apply plan to model | Per-material totals (incl. dropped) unchanged; target only overwritten when empty/allowed |
@@ -348,7 +351,8 @@ Each ends with `./gradlew build` green, `/test-server` on all versions, a commit
 | K3 | Remainder with an otherwise full inventory → bowl lands in the source slot that was just emptied; per-material totals equal |
 | K4 | Event cancelled → nothing recorded |
 | K5 | Per-event: snapshot amount read at event time is pre-decrement (amount-1 gate) |
-| K6 | Each listener records the right slot and hand (incl. both-hands events) |
+| K6 | Each listener records the right slot and hand (incl. both-hands events): bucket fill/empty, thrown snowball from the offhand, non-consuming throw, right-click air (reported cancelled), spawn egg, denied use, left click, right-click equip, bow arrow in either hand, infinity, crossbow rocket, crossbow loading from storage with an unrelated offhand item |
+| K8 | Discards: totem pop, drop and hand swap after a right-click don't refill; a cancelled resurrect discards nothing; a real use after a discard still refills (inventory clicks can't be built in MockBukkit; the bot covers X4) |
 | K7 | Toggle persists in PDC; reload swaps config |
 
 ### In-game (Pun, any test server unless noted)
@@ -362,10 +366,10 @@ Each ends with `./gradlew build` green, `/test-server` on all versions, a commit
 | G5 | Empty the last water bucket; fill the last empty bucket; milk a cow with the last bucket; catch a fish | Correct refill each time, filled bucket moved out |
 | G6 | Throw last snowball, egg, pearl, splash potion, XP bottle, wind charge | Refilled |
 | G7 | Last spawn egg, boat, bone meal, rocket (incl. elytra boost), end crystal, eye of ender, item frame, name tag, lead, wheat to a cow | Refilled |
-| G8 | Bow with last arrow in offhand; last tipped arrow; crossbow loading last arrow and last rocket | Offhand refilled, tipped only with identical |
+| G8 | Bow with last arrow in offhand; last tipped arrow; crossbow loading last rocket | Offhand refilled, tipped only with identical |
 | G9 | `tool-break: true`, break an enchanted pickaxe with a plain and an identical one available; a named sword | Identical enchants picked; named never substitutes |
 | G10 | Throw a trident, equip armor by right-click | No refill |
-| G11 | Q the last item | No refill |
+| G11 | Q the last item; right-click the air with the last diamond and Q in the same tick (G11b) | No refill |
 | G12 | `/autoitem toggle`, disabled world, creative mode | No refill |
 | G13 | Sound on by default; action bar after enabling it | As configured |
 | V1 | Boot on Paper 1.21.1, 1.21.11, 26.2 and Folia | Enables, no errors or warnings |
@@ -388,6 +392,8 @@ Each ends with `./gradlew build` green, `/test-server` on all versions, a commit
 | X10 | Both hands run out in the same tick (place with main, eat with offhand) | Both refilled if sources exist, main first; conserved |
 | X11 | Per-world / per-gamemode inventory plugin swapping inventories on change | `CONTEXT_CHANGED`, nothing touched |
 | X12 | Folia: player crosses a region border between event and task | Task runs on the new owner; conserved |
+| X13 | Offhand totem, empty main hand, hold right-click, take lethal damage | Totem pops, offhand stays empty (no auto-totem); spares untouched |
+| X1b / X4 | Right-click the air with the last diamond, then F, or a click that picks it up, in the same tick | No refill; conserved |
 
 ## 9. Open questions
 

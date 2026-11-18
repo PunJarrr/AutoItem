@@ -33,7 +33,8 @@ class BatchTest {
         assertEquals(WORLD, merged.world());
         assertEquals("SURVIVAL", merged.gameMode());
         assertEquals(Set.of(key("water_bucket"), key("milk_bucket")), merged.allowedRemainders());
-        assertEquals(Set.of(Trigger.RIGHT_CLICK, Trigger.BUCKETS), merged.triggers());
+        // The right-click catch-all gives way to the specific trigger.
+        assertEquals(Set.of(Trigger.BUCKETS), merged.triggers());
     }
 
     @Test
@@ -43,6 +44,18 @@ class BatchTest {
         batch.add(new Check(0, shears, Set.of(), EnumSet.of(Trigger.RIGHT_CLICK), WORLD, "SURVIVAL"));
         batch.add(new Check(0, shears, Set.of(), EnumSet.of(Trigger.TOOL_BREAK), WORLD, "SURVIVAL"));
         assertTrue(batch.checks().getFirst().isToolBreak());
+    }
+
+    @Test
+    void removeAndClearForgetChecks() {
+        Batch batch = new Batch();
+        batch.add(new Check(0, FakeItem.of("torch", 1), Set.of(), EnumSet.of(Trigger.BLOCK_PLACE), WORLD, "SURVIVAL"));
+        batch.add(new Check(40, FakeItem.of("torch", 1), Set.of(), EnumSet.of(Trigger.BLOCK_PLACE), WORLD,
+                "SURVIVAL"));
+        batch.remove(0);
+        assertEquals(List.of(40), batch.checks().stream().map(Check::slot).toList());
+        batch.clear();
+        assertTrue(batch.isEmpty());
     }
 
     @Test

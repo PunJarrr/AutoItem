@@ -21,10 +21,17 @@ public record Check(int slot, ItemView snapshot, Set<String> allowedRemainders, 
 
     public Check {
         allowedRemainders = Set.copyOf(allowedRemainders);
-        triggers = Set.copyOf(triggers);
         if (triggers.isEmpty()) {
             throw new IllegalArgumentException("a check needs at least one trigger");
         }
+        // RIGHT_CLICK is the catch-all (PlayerInteractEvent also fires for placing, buckets, throwing...).
+        // Next to a more specific trigger it is dropped, so that trigger's switch decides.
+        if (triggers.size() > 1 && triggers.contains(Trigger.RIGHT_CLICK)) {
+            Set<Trigger> specific = EnumSet.copyOf(triggers);
+            specific.remove(Trigger.RIGHT_CLICK);
+            triggers = specific;
+        }
+        triggers = Set.copyOf(triggers);
     }
 
     /** A tool-break check uses the tool-break matching rules (SPEC §4.2). */
@@ -34,7 +41,8 @@ public record Check(int slot, ItemView snapshot, Set<String> allowedRemainders, 
 
     /**
      * Dedup (SPEC §3 step 4): keep this check's snapshot and context, and union the allowed remainders and
-     * triggers. Accepting more remainders is safe because a remainder is always moved, never deleted.
+     * triggers (minus the right-click catch-all, see the constructor). Accepting more remainders is safe
+     * because a remainder is always moved, never deleted.
      */
     public Check merge(Check later) {
         if (later.slot != slot) {
