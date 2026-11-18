@@ -30,6 +30,8 @@ public final class CheckRecorder {
     private final RefillTask task;
     /** One batch per player, only touched from that player's owning thread. Concurrent for Folia hand-offs. */
     private final Map<UUID, Batch> batches = new ConcurrentHashMap<>();
+    /** Set on plugin disable. A re-enable builds a new recorder, so this one never opens again. */
+    private volatile boolean closed;
 
     public CheckRecorder(Plugin plugin, ConfigService config, PlayerStates states, RefillTask task) {
         this.plugin = plugin;
@@ -122,6 +124,9 @@ public final class CheckRecorder {
     }
 
     private void enqueue(Player player, Check check) {
+        if (closed) {
+            return;
+        }
         UUID id = player.getUniqueId();
         Batch batch = batches.get(id);
         if (batch == null) {
@@ -142,7 +147,17 @@ public final class CheckRecorder {
 
     private void drain(Player player, Batch batch) {
         batches.remove(player.getUniqueId(), batch);
-        task.run(player, batch);
+        // After /reload or a plugin manager unload (or a disable and re-enable of the same instance), a task
+        // queued before the disable must not refill with the old instance and its old config.
+        if (!closed && plugin.isEnabled()) {
+            task.run(player, batch);
+        }
+    }
+
+    /** Forgets every pending check and stops queued tasks from refilling (plugin disable). */
+    public void clear() {
+        closed = true;
+        batches.clear();
     }
 
     /** Players with checks waiting for their task. For tests. */

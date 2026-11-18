@@ -497,10 +497,9 @@ class RefillPlannerTest {
         return slots;
     }
 
-    /** Applies refills to a model inventory the way {@code RefillExecutor} does, counting drops. */
+    /** Applies refills to a model inventory the way {@code RefillExecutor} does: a swap of source and target. */
     static final class ModelInventory {
         final ItemView[] slots;
-        final Map<String, Integer> ground = new HashMap<>();
 
         ModelInventory(ItemView[] slots) {
             this.slots = slots;
@@ -508,39 +507,12 @@ class RefillPlannerTest {
 
         void apply(Refill refill) {
             ItemView moved = slots[refill.source()];
-            ItemView remainder = slots[refill.target()];
-            slots[refill.source()] = null;
+            slots[refill.source()] = slots[refill.target()]; // the remainder, or null
             slots[refill.target()] = moved;
-            if (remainder != null) {
-                addItem((FakeItem) remainder);
-            }
-        }
-
-        /** Like Bukkit's addItem over storage slots 0–35: top up similar stacks, then empty slots, then drop. */
-        private void addItem(FakeItem item) {
-            int left = item.amount();
-            int max = item.maxDurability() > 0 ? 1 : 64;
-            for (int i = 0; i < 36 && left > 0; i++) {
-                if (slots[i] != null && slots[i].isSimilar(item) && slots[i].amount() < max) {
-                    int add = Math.min(left, max - slots[i].amount());
-                    slots[i] = ((FakeItem) slots[i]).amount(slots[i].amount() + add);
-                    left -= add;
-                }
-            }
-            for (int i = 0; i < 36 && left > 0; i++) {
-                if (slots[i] == null) {
-                    int add = Math.min(left, max);
-                    slots[i] = item.amount(add);
-                    left -= add;
-                }
-            }
-            if (left > 0) {
-                ground.merge(item.material(), left, Integer::sum);
-            }
         }
 
         Map<String, Integer> totals() {
-            Map<String, Integer> totals = new HashMap<>(ground);
+            Map<String, Integer> totals = new HashMap<>();
             for (ItemView item : slots) {
                 if (item != null) {
                     totals.merge(item.material(), item.amount(), Integer::sum);

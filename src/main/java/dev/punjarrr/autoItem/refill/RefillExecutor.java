@@ -2,14 +2,10 @@ package dev.punjarrr.autoItem.refill;
 
 import dev.punjarrr.autoItem.bukkit.BukkitItemView;
 import dev.punjarrr.autoItem.refill.Decision.Refill;
-import org.bukkit.Location;
-import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 import org.jetbrains.annotations.Nullable;
-
-import java.util.Map;
 
 /**
  * The only code that writes player inventories (SPEC §3 "The refill"). One synchronous call on the
@@ -46,24 +42,11 @@ public final class RefillExecutor {
         // Clone everything before its slot is written: getItem() may return a live mirror.
         ItemStack moved = sourceNow.clone();
         ItemStack remainder = targetEmpty ? null : targetNow.clone();
-        inventory.setItem(refill.source(), null);
+        // A swap: the remainder (bowl, bottle, bucket) goes into the slot the stack came from. That slot was
+        // just verified and is emptied by this move, so it always fits: nothing is ever dropped, and the
+        // remainder never lands in a hand or in another pending target.
+        inventory.setItem(refill.source(), remainder);
         inventory.setItem(refill.target(), moved.clone());
-        if (remainder != null) {
-            giveBack(player, inventory, remainder);
-        }
         return moved;
-    }
-
-    /** Into the inventory if it fits; whatever doesn't fit drops at the player's feet. */
-    private static void giveBack(Player player, PlayerInventory inventory, ItemStack remainder) {
-        Map<Integer, ItemStack> leftover = inventory.addItem(remainder);
-        if (leftover.isEmpty()) {
-            return;
-        }
-        Location feet = player.getLocation();
-        World world = feet.getWorld();
-        for (ItemStack stack : leftover.values()) {
-            world.dropItem(feet, stack);
-        }
     }
 }

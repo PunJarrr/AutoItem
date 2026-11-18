@@ -33,8 +33,8 @@ public final class RefillPlanner {
     }
 
     /**
-     * @param reserved slots already refilled earlier in this batch: never sources, so a second check (the
-     *                 offhand) can't undo the first one's refill
+     * @param reserved the targets of every check in this batch: never sources, so one check can't take
+     *                 another's slot (e.g. the offhand undoing the main hand's refill)
      */
     public Decision plan(Check check, @Nullable ItemView[] slots, RefillSettings settings, PlayerState player,
                          Set<Integer> reserved) {
@@ -118,7 +118,7 @@ public final class RefillPlanner {
 
     /**
      * Non-empty storage slots 0–35 other than the target, the held slot (taking the held stack would just
-     * empty the main hand) and slots refilled earlier in this batch; the hotbar only if allowed.
+     * empty the main hand) and the batch's other targets; the hotbar only if allowed.
      */
     private static IntStream candidates(Check check, @Nullable ItemView[] slots, RefillSettings settings,
                                         int heldSlot, Set<Integer> reserved) {

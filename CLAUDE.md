@@ -35,7 +35,7 @@ The developer is Pun (author `PunJarrr`). He runs a Paper server on Proxmox and 
 
 1. Listeners only record checks. They never touch inventories and never cancel or un-cancel events.
 2. The decision is `RefillPlanner.plan(...)`, a pure function of the check and the inventory **read when the task runs**.
-3. `RefillExecutor` is the only class that writes inventories. It clones, clears the source, takes the remainder, fills the target, and gives the remainder back with `addItem()`, dropping what doesn't fit. Never delete an item.
+3. `RefillExecutor` is the only class that writes inventories. It verifies both slots, clones, and swaps: the stack goes into the target, the remainder (if any) into the source slot. Nothing is ever dropped or deleted.
 4. Clone every `ItemStack` before its slot is written.
 5. Sources are storage slots 0–35 only, never the target.
 6. Re-check every gate (online, dead, game mode, world, toggle, permission) at task time; a world or game-mode change aborts.

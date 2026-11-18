@@ -10,6 +10,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -38,19 +39,24 @@ public final class RefillTask {
     }
 
     public void run(Player player, Batch batch) {
-        Set<Integer> refilled = new HashSet<>();
-        for (Check check : batch.checks()) {
-            runOne(player, check, refilled);
+        // Every slot this batch may refill is off limits as a source, for every check in it: one check never
+        // takes another's slot (before or after it was refilled), so a remainder never lands in another target.
+        List<Check> checks = batch.checks();
+        Set<Integer> targets = new HashSet<>();
+        for (Check check : checks) {
+            targets.add(check.slot());
+        }
+        for (Check check : checks) {
+            runOne(player, check, targets);
         }
     }
 
-    private void runOne(Player player, Check check, Set<Integer> refilled) {
+    private void runOne(Player player, Check check, Set<Integer> targets) {
         BukkitItemView[] slots = read(player.getInventory());
-        Decision decision = planner.plan(check, slots, config.settings(), states.of(player), refilled);
+        Decision decision = planner.plan(check, slots, config.settings(), states.of(player), targets);
         if (decision instanceof Refill refill) {
             ItemStack moved = executor.apply(player, refill, slots[refill.source()], slots[refill.target()]);
             if (moved != null) {
-                refilled.add(refill.target());
                 try {
                     feedback.refilled(player, moved);
                 } catch (RuntimeException e) {

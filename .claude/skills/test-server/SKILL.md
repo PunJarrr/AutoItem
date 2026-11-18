@@ -23,11 +23,11 @@ Versions to test: $ARGUMENTS (default: all four).
    ```sh
    log=build/smoke/<name>.log; : > $log
    ( t=0; until grep -q 'Done (' $log 2>/dev/null || [ $t -ge 300 ]; do sleep 2; t=$((t+2)); done; sleep 5; echo stop
-     t=0; while pgrep -f 'com.mojang.eula.agree' >/dev/null && [ $t -lt 90 ]; do sleep 2; t=$((t+2)); done
-     pgrep -f 'com.mojang.eula.agree' >/dev/null && { echo "SIGTERM fallback" >&2; pkill -TERM -f 'com.mojang.eula.agree'; } ) | ./gradlew <task> --console=plain >> $log 2>&1
+     t=0; while pgrep -f '[j]ava.*com[.]mojang[.]eula[.]agree' >/dev/null && [ $t -lt 90 ]; do sleep 2; t=$((t+2)); done
+     pgrep -f '[j]ava.*com[.]mojang[.]eula[.]agree' >/dev/null && { echo "SIGTERM fallback" >&2; pkill -TERM -f '[j]ava.*com[.]mojang[.]eula[.]agree'; } ) | ./gradlew <task> --console=plain >> $log 2>&1
    ```
 
-   Run this with a Bash timeout of 600000 ms, one server per call. The first run per server downloads the jar (and Java 25 for 26.2), so it's slower. If the log contains `SIGTERM fallback`, the clean `stop` failed: report it.
+   The `[j]ava` pattern keeps `pgrep`/`pkill` from matching the shell running this snippet (its own command line contains the pattern). Run this with a Bash timeout of 600000 ms, one server per call. The first run per server downloads the jar (and Java 25 for 26.2), so it's slower. If the log contains `SIGTERM fallback`, the clean `stop` failed: report it.
 4. Check `build/smoke/<name>.log` (the full server log is also at `<run dir>/logs/latest.log`):
    - `Enabling AutoItem` is present
    - `Done (` is present (startup finished)

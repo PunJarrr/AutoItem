@@ -2,8 +2,10 @@ package dev.punjarrr.autoItem;
 
 import com.destroystokyo.paper.event.player.PlayerLaunchProjectileEvent;
 import com.destroystokyo.paper.event.player.PlayerReadyArrowEvent;
+import com.destroystokyo.paper.event.player.PlayerRecipeBookClickEvent;
 import org.bukkit.GameMode;
 import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.entity.Item;
@@ -102,8 +104,7 @@ class TriggersMockBukkitTest {
         tick();
 
         assertStack(Material.BUCKET, 5, inventory.getItem(0));
-        assertEmpty(inventory.getItem(10));
-        assertStack(Material.WATER_BUCKET, 1, inventory.getItem(1)); // first free slot
+        assertStack(Material.WATER_BUCKET, 1, inventory.getItem(10)); // the remainder takes the source's slot
         assertEquals(before, totals());
     }
 
@@ -119,8 +120,7 @@ class TriggersMockBukkitTest {
         tick();
 
         assertStack(Material.WATER_BUCKET, 1, inventory.getItem(0));
-        assertEmpty(inventory.getItem(12));
-        assertStack(Material.BUCKET, 1, inventory.getItem(1)); // first free slot
+        assertStack(Material.BUCKET, 1, inventory.getItem(12)); // the remainder takes the source's slot
         assertEquals(before, totals());
     }
 
@@ -342,6 +342,38 @@ class TriggersMockBukkitTest {
 
         assertEmpty(inventory.getItem(0));
         assertStack(Material.DIAMOND, 1, inventory.getItemInOffHand());
+        assertStack(Material.DIAMOND, 5, inventory.getItem(20));
+    }
+
+    @Test
+    void recipeBookAfterARightClickNeverRefills() {
+        inventory.setItem(0, new ItemStack(Material.DIAMOND, 1));
+        inventory.setItem(20, new ItemStack(Material.DIAMOND, 5));
+        rightClickAir(EquipmentSlot.HAND);
+
+        // The recipe book moves the diamond into the crafting grid.
+        call(new PlayerRecipeBookClickEvent(player, NamespacedKey.minecraft("diamond_block"), false));
+        inventory.setItem(0, null);
+        tick();
+
+        assertEmpty(inventory.getItem(0));
+        assertStack(Material.DIAMOND, 5, inventory.getItem(20));
+    }
+
+    @Test
+    void aDifferentItemUsedInTheSameSlotLaterInTheTickIsTheOneRefilled() {
+        // Armor-stand swap: right-click with the last diamond, get cobblestone back, place it.
+        inventory.setItem(0, new ItemStack(Material.DIAMOND, 1));
+        inventory.setItem(20, new ItemStack(Material.DIAMOND, 5));
+        inventory.setItem(21, new ItemStack(Material.COBBLESTONE, 30));
+        rightClickAir(EquipmentSlot.HAND);
+        inventory.setItem(0, new ItemStack(Material.COBBLESTONE, 1));
+        call(new PlayerInteractEvent(player, Action.RIGHT_CLICK_BLOCK, inventory.getItem(0), block, BlockFace.UP,
+                EquipmentSlot.HAND));
+        inventory.setItem(0, null);
+        tick();
+
+        assertStack(Material.COBBLESTONE, 30, inventory.getItem(0));
         assertStack(Material.DIAMOND, 5, inventory.getItem(20));
     }
 

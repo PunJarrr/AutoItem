@@ -67,6 +67,13 @@ public class AutoItem extends JavaPlugin {
         pluginCommand.setTabCompleter(command);
     }
 
+    @Override
+    public void onDisable() {
+        if (recorder != null) {
+            recorder.clear();
+        }
+    }
+
     /**
      * Which items right-clicking equips. A hook only because MockBukkit can't answer
      * {@code Material#getEquipmentSlot()}; tests override it.

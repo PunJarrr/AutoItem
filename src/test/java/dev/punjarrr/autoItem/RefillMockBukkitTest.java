@@ -148,8 +148,7 @@ class RefillMockBukkitTest {
         tick();
 
         assertStack(Material.MUSHROOM_STEW, 1, inventory.getItem(0));
-        assertEquals(1, totals().get(Material.BOWL));
-        assertTrue(inventory.contains(Material.BOWL));
+        assertStack(Material.BOWL, 1, inventory.getItem(10)); // the remainder takes the source's slot
         assertEquals(before, totals());
     }
 
@@ -170,6 +169,66 @@ class RefillMockBukkitTest {
         // The source slot was just emptied, so the bowl always has room there.
         assertStack(Material.BOWL, 1, inventory.getItem(10));
         assertEquals(before, totals());
+    }
+
+    @Test
+    void k3_offhandStewWithAnEmptyHeldSlotNeverPutsTheBowlInTheHand() {
+        inventory.setHeldItemSlot(0); // empty
+        inventory.setItemInOffHand(new ItemStack(Material.MUSHROOM_STEW, 1));
+        inventory.setItem(25, new ItemStack(Material.MUSHROOM_STEW, 1));
+
+        consume(EquipmentSlot.OFF_HAND);
+        inventory.setItemInOffHand(new ItemStack(Material.BOWL, 1));
+        tick();
+
+        assertStack(Material.MUSHROOM_STEW, 1, inventory.getItemInOffHand());
+        assertEmpty(inventory.getItem(0));
+        assertStack(Material.BOWL, 1, inventory.getItem(25));
+    }
+
+    @Test
+    void k4_pendingChecksAreDroppedWhenThePluginIsDisabled() {
+        inventory.setItem(0, new ItemStack(Material.COBBLESTONE, 1));
+        inventory.setItem(20, new ItemStack(Material.COBBLESTONE, 64));
+        place(EquipmentSlot.HAND);
+        inventory.setItem(0, null);
+        server.getPluginManager().disablePlugin(plugin);
+        tick();
+
+        assertEmpty(inventory.getItem(0));
+        assertStack(Material.COBBLESTONE, 64, inventory.getItem(20));
+    }
+
+    @Test
+    void k4_aTaskQueuedBeforeADisableAndReEnableNeverRuns() {
+        inventory.setItem(0, new ItemStack(Material.COBBLESTONE, 1));
+        inventory.setItem(20, new ItemStack(Material.COBBLESTONE, 64));
+        place(EquipmentSlot.HAND);
+        inventory.setItem(0, null);
+        server.getPluginManager().disablePlugin(plugin);
+        server.getPluginManager().enablePlugin(plugin);
+        tick();
+
+        assertEmpty(inventory.getItem(0));
+        assertStack(Material.COBBLESTONE, 64, inventory.getItem(20));
+    }
+
+    @Test
+    void x3_twoHotbarChecksInOneTickNeverTakeEachOthersSlot() {
+        // Hacked client: right-click with a single diamond in slot 3 (nothing used up), scroll to slot 0, place
+        // the last cobblestone there, all in one tick. Slot 3 is a pending target, so slot 0's check must not
+        // pull from it even though it's a hotbar slot that is no longer held.
+        inventory.setHeldItemSlot(3);
+        inventory.setItem(3, new ItemStack(Material.COBBLESTONE, 1));
+        place(EquipmentSlot.HAND); // records slot 3; the block is "not consumed" (slot 3 keeps it)
+        inventory.setHeldItemSlot(0);
+        inventory.setItem(0, new ItemStack(Material.COBBLESTONE, 1));
+        place(EquipmentSlot.HAND);
+        inventory.setItem(0, null); // slot 0's block is used up
+        tick();
+
+        assertEmpty(inventory.getItem(0));
+        assertStack(Material.COBBLESTONE, 1, inventory.getItem(3));
     }
 
     @Test

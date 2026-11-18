@@ -41,6 +41,7 @@ The overriding requirement is **no duplication and no loss**. A refill only ever
 - Pending checks live in a `ConcurrentHashMap<UUID, Batch>`. A batch is only touched by the player's owning thread; the map is concurrent because Folia can hand a player to another region thread between the event and the task.
 - The config snapshot is an immutable record behind a `volatile` field; `/autoitem reload` swaps it.
 - No `Bukkit.getScheduler()`, no async tasks, no global state mutated from region threads.
+- On disable (`/reload`, plugin managers) pending checks are cleared, and a task queued before the disable doesn't run.
 
 ## 3. Core model
 
@@ -59,8 +60,8 @@ The overriding requirement is **no duplication and no loss**. A refill only ever
 2. A listener records a check only if the target slot, read at event time, holds an item similar to the event's item **with amount 1**. Every event used fires before vanilla decrements the stack (checked in the Paper 1.21.1 and 26.2 server code and by the bot tests), so amount 1 means "this use takes the last one". Larger stacks are never recorded. This is also why "use the second-to-last item, then press Q" never refills. Bows are the exception that proves the rule: a bow draws its arrow out of the inventory *before* `EntityShootBowEvent`, so the bow trigger uses `PlayerReadyArrowEvent`, which fires first.
    Listeners record even when their trigger is switched off; the switch is applied at task time to the merged check (step 4), so a disabled specific trigger also silences the right-click catch-all for the same use.
 3. **Over-recording is safe, under-recording only misses a refill.** Where an event doesn't say which hand was used, record both hands; the task decides.
-4. **Dedup:** at most one check per player per slot per tick. If several events record the same slot in one tick (`BlockPlaceEvent` + `PlayerInteractEvent`), keep the first snapshot, union the allowed remainders and triggers, and the kind becomes `TOOL_BREAK` if any record was. `right-click` is the catch-all (`PlayerInteractEvent` also fires for placing, buckets and throws): next to any more specific trigger it is dropped, so with `block-place: false` placing the last block never refills through right-click.
-5. **Discards:** if something other than a trigger empties or swaps a hand in the same tick, the pending check for that slot is dropped: a drop (`PlayerDropItemEvent`, the held slot), a hand swap (`PlayerSwapHandItemsEvent`, both hands), an inventory click or drag (`InventoryClickEvent`/`InventoryDragEvent`, every check for that player, including clicks a hacked client sends with no inventory open) and a totem pop (`EntityResurrectEvent`, the totem's hand). All at `MONITOR`, `ignoreCancelled = true`, and they only remove recorder state. Without this, a check from a use that consumed nothing (the right-click catch-all, a bow starting to draw) refills a slot the player emptied another way: right-clicking a totem every tick and then popping it would be an auto-totem.
+4. **Dedup:** at most one check per player per slot per tick. If several events record the same slot in one tick (`BlockPlaceEvent` + `PlayerInteractEvent`), keep the first snapshot, union the allowed remainders and triggers (only when both records saw the same item; if a different item is recorded later, the slot changed in between, e.g. an armor-stand swap, and the later check replaces the earlier one), and the kind becomes `TOOL_BREAK` if any record was. `right-click` is the catch-all (`PlayerInteractEvent` also fires for placing, buckets and throws): next to any more specific trigger it is dropped, so with `block-place: false` placing the last block never refills through right-click.
+5. **Discards:** if something other than a trigger empties or swaps a hand in the same tick, the pending check for that slot is dropped: a drop (`PlayerDropItemEvent`, the held slot), a hand swap (`PlayerSwapHandItemsEvent`, both hands), an inventory click or drag (`InventoryClickEvent`/`InventoryDragEvent`, every check for that player, including clicks a hacked client sends with no inventory open) a totem pop (`EntityResurrectEvent`, the totem's hand), pick block (`PlayerPickItemEvent`), choosing a villager trade (`TradeSelectEvent`) and the recipe book (`PlayerRecipeBookClickEvent`); the last three move items between slots without a click event and discard every check for that player. All at `MONITOR`, `ignoreCancelled = true`, and they only remove recorder state. Without this, a check from a use that consumed nothing (the right-click catch-all, a bow starting to draw) refills a slot the player emptied another way: right-clicking a totem every tick and then popping it would be an auto-totem.
 6. One tick later, one task per player drains the batch. Checks run main hand first, then offhand. **Each check re-reads the live inventory**, after the previous check's refill.
 
 ### The decision (pure function)
@@ -87,10 +88,10 @@ Given `Refill(source, target)`, on the owning thread, in one method:
 
 1. Re-verify that the source slot still holds exactly what was planned and the target still holds what was planned (empty or the remainder). Same task, so this is defensive; on any mismatch, change nothing.
 2. `sourceClone = inv.getItem(source).clone()`
-3. `inv.setItem(source, null)`
+3. `inv.setItem(source, null)` (in code, steps 3 and 6 are one write: the source slot gets the remainder or nothing)
 4. `remainderClone = inv.getItem(target)` cloned if not empty, else none
 5. `inv.setItem(target, sourceClone)`
-6. If there is a remainder: `leftover = inv.addItem(remainderClone)`; each leftover stack is dropped at the player's location with `world.dropItem`. (The source slot was just emptied, so a one-item remainder always fits; the drop is a fallback.)
+6. If there is a remainder, it goes into the source slot (step 3 just emptied it): a swap. It always fits, nothing is ever dropped, and it never lands in a hand or in another pending target. (Until milestone 4 this used `addItem` with a drop fallback; the audit showed the drop could be deleted by plugins that cancel item spawns, and `addItem` could put a bowl into an empty held slot.)
 7. Feedback (sound, action bar).
 
 Every `ItemStack` read from the inventory is cloned before its slot is written; `getItem()` can return a live mirror that turns to air when the slot is cleared.
@@ -107,8 +108,8 @@ No files, no database. Pending checks are in memory for at most one tick.
 
 Every change must preserve all of these. The `exploit-reviewer` agent checks against this list.
 
-- **I1 No duplication:** a refill only moves items. For every material, the count across the player's inventory (all 41 slots and the cursor) plus items dropped by the refill is identical before and after.
-- **I2 No loss:** the target slot is overwritten only when it is empty or holds exactly one allowed remainder. The remainder always ends up in the inventory or on the ground. The source slot is cleared only after its clone exists.
+- **I1 No duplication:** a refill only moves items (a swap of two inventory slots). For every material, the count across the player's inventory (all 41 slots and the cursor) is identical before and after.
+- **I2 No loss:** the target slot is overwritten only when it is empty or holds exactly one allowed remainder. The remainder always ends up in the slot the refill stack came from. The source slot is cleared only after its clone exists.
 - **I3 Task-time state only:** the decision uses the inventory and player state read when the task runs. Event data only says *which slot*, *what was there* and *what may be left*.
 - **I4 One task, no yield:** each check's read, decision and mutation happen in one synchronous run on the player's owning thread.
 - **I5 Listeners are observers:** no inventory writes, no cancelling or un-cancelling, `MONITOR` priority.
@@ -140,7 +141,7 @@ All listeners are `@EventHandler(priority = MONITOR, ignoreCancelled = true)`, e
 ### 4.2 Matching and source slots
 
 - **Normal checks:** a source matches when `source.isSimilar(snapshot)`. So a Speed potion only refills from Speed potions, a named or enchanted item only from an identical one.
-- **Candidates:** storage slots `9–35`, then `0–8` if `sources.hotbar` is on (default on). Never the target slot, and never the hotbar slot the player is holding at task time: taking it would just empty the main hand (when both hands run out together, the offhand must not take the stack that was just put in the main hand). Slots already refilled earlier in the same batch are never sources either, so the offhand check can't take back what the main-hand check just put in (even if the player scrolled away in between).
+- **Candidates:** storage slots `9–35`, then `0–8` if `sources.hotbar` is on (default on). Never the target slot, and never the hotbar slot the player is holding at task time: taking it would just empty the main hand (when both hands run out together, the offhand must not take the stack that was just put in the main hand). The targets of every check in the same batch are never sources either, so one check can't take another's slot: the offhand can't take back what the main-hand check just put in (even after a scroll), and a remainder never lands in another target.
 - **Order:** main inventory (`9–35`) before hotbar; within each, the **smallest** matching stack first (tidies partial stacks); ties go to the lowest slot index.
 - **Ignored items** (`ignored-items`) are never refilled: if the snapshot matches an entry, skip.
 - **Tool break** (isSimilar can't work because durability differs):
@@ -338,10 +339,10 @@ Each ends with `./gradlew build` green, `/test-server` on all versions, a commit
 | U25 | Tool break, several candidates, same enchants | Main before hotbar, then least damaged |
 | U26 | Tool break with `tool-break: false` | `DISABLED` |
 | U27 | Remainders inverse: BUCKET → all filled buckets; GLASS_BOTTLE → POTION, HONEY_BOTTLE | As listed |
-| U28 | Dedup: two records same slot same tick; discard one slot / all | One check, first snapshot, union of remainders, TOOL_BREAK wins, right-click dropped next to a specific trigger; discarded checks are gone |
+| U28 | Dedup: two records same slot same tick; discard one slot / all | Same item: one check, first snapshot, union of remainders, TOOL_BREAK wins, right-click dropped next to a specific trigger. Different item: the later check replaces the earlier one. Discarded checks are gone |
 | U29 | Two checks (main + offhand) needing the same source material, only one source; same after scrolling away from the refilled slot | Main hand gets it, offhand `NO_SOURCE` (the refilled slot is held, or reserved for this batch) |
 | U30 | Config: invalid values, unknown materials, unknown tags, `NONE`, missing keys, broken MiniMessage | Warnings with key path; defaults |
-| U31 | Conservation property: random inventories × random checks, apply plan to model | Per-material totals (incl. dropped) unchanged; target only overwritten when empty/allowed |
+| U31 | Conservation property: random inventories × random checks, apply plan to model | Per-material totals unchanged; target only overwritten when empty/allowed |
 
 ### MockBukkit integration (where MockBukkit supports the API)
 
@@ -349,11 +350,11 @@ Each ends with `./gradlew build` green, `/test-server` on all versions, a commit
 |---|---|
 | K1 | Fire `BlockPlaceEvent` with the last block, tick → slot refilled from 9–35, source cleared |
 | K2 | `PlayerItemConsumeEvent` on last stew, set slot to bowl, tick → stew in slot, bowl elsewhere |
-| K3 | Remainder with an otherwise full inventory → bowl lands in the source slot that was just emptied; per-material totals equal |
+| K3 | Remainder with an otherwise full inventory → bowl lands in the source slot; offhand stew with an empty held slot → the bowl never lands in the hand; per-material totals equal |
 | K4 | Event cancelled → nothing recorded |
 | K5 | Per-event: snapshot amount read at event time is pre-decrement (amount-1 gate) |
 | K6 | Each listener records the right slot and hand (incl. both-hands events): bucket fill/empty, thrown snowball from the offhand, non-consuming throw, right-click air (reported cancelled), spawn egg, denied use, left click, right-click equip, bow arrow in either hand, infinity, crossbow rocket, crossbow loading from storage with an unrelated offhand item |
-| K8 | Discards: totem pop, drop and hand swap after a right-click don't refill; a cancelled resurrect discards nothing; a real use after a discard still refills (inventory clicks can't be built in MockBukkit; the bot covers X4) |
+| K8 | Discards: totem pop, drop, hand swap and recipe book after a right-click don't refill; a cancelled resurrect discards nothing; a real use after a discard still refills; a different item used later in the same slot is the one refilled; pending checks are dropped on plugin disable (inventory clicks, pick block and trades can't be built in MockBukkit; X4 is a bot test, the other two in-game) |
 | K7 | `/autoitem toggle` flips and persists the PDC key and stops refills; needs `autoitem.toggle`; refused from the console. `/autoitem reload` applies a new config, reports warnings, keeps the old config on broken YAML, needs `autoitem.reload`. Usage on no/unknown argument; tab completion only lists allowed subcommands. No refill without `autoitem.use` or in a disabled world. Tool break off by default; on, identical enchantments win and a named tool never stands in. Sound by default, action bar when configured, nothing when no refill happened |
 
 ### In-game (Pun, any test server unless noted)
@@ -385,11 +386,11 @@ Each ends with `./gradlew build` green, `/test-server` on all versions, a commit
 | X2 | Drop (Q) after using the second-to-last | Not recorded (amount 2), no refill |
 | X3 | Change hotbar slot | Original slot refilled, not the new one |
 | X4 | Inventory click with no inventory open (hacked client) moving an item into the slot | Abort; conserved |
-| X5 | Click that takes the remainder onto the cursor | Refill, cursor bowl untouched; conserved |
+| X5 | Click that takes the remainder onto the cursor | No refill (the click discards the check); cursor bowl untouched; conserved |
 | X6 | Die, log out, change world, change game mode before the task | No refill; conserved |
 | X7 | Another plugin cancels the event | Nothing recorded |
 | X8 | Another plugin writes the target slot in the same tick | `NOT_USED_UP` or `SLOT_CHANGED`; nothing overwritten |
-| X9 | Inventory full when the remainder comes back | The source slot was just emptied, so the remainder lands there; the drop at the player's feet is a defensive fallback. Conserved |
+| X9 | Inventory full when the remainder comes back | The remainder goes into the source slot (a swap), so it always fits; nothing drops. Conserved |
 | X10 | Both hands run out in the same tick (place with main, eat with offhand) | Both refilled if sources exist, main first; conserved |
 | X11 | Per-world / per-gamemode inventory plugin swapping inventories on change | `CONTEXT_CHANGED`, nothing touched |
 | X12 | Folia: player crosses a region border between event and task | Task runs on the new owner; conserved |

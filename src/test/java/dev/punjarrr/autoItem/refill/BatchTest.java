@@ -17,9 +17,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class BatchTest {
 
     @Test
-    void sameSlotMergesKeepingTheFirstSnapshot() {
+    void sameItemSameSlotMergesKeepingTheFirstSnapshot() {
         FakeItem first = FakeItem.of("bucket", 1);
-        FakeItem second = FakeItem.of("bucket", 1).meta("other");
+        FakeItem second = FakeItem.of("bucket", 1);
         Batch batch = new Batch();
         batch.add(new Check(3, first, Set.of(key("water_bucket")), EnumSet.of(Trigger.RIGHT_CLICK), WORLD,
                 "SURVIVAL"));
@@ -35,6 +35,20 @@ class BatchTest {
         assertEquals(Set.of(key("water_bucket"), key("milk_bucket")), merged.allowedRemainders());
         // The right-click catch-all gives way to the specific trigger.
         assertEquals(Set.of(Trigger.BUCKETS), merged.triggers());
+    }
+
+    @Test
+    void aDifferentItemInTheSameSlotReplacesTheEarlierCheck() {
+        // The slot changed between the two records (an armor-stand swap): the item used last is refilled.
+        Batch batch = new Batch();
+        batch.add(new Check(0, FakeItem.of("diamond", 1), Set.of(), EnumSet.of(Trigger.RIGHT_CLICK), WORLD,
+                "SURVIVAL"));
+        FakeItem cobble = FakeItem.of("cobblestone", 1);
+        batch.add(new Check(0, cobble, Set.of(), EnumSet.of(Trigger.BLOCK_PLACE), WORLD, "SURVIVAL"));
+
+        Check only = batch.checks().getFirst();
+        assertSame(cobble, only.snapshot());
+        assertEquals(Set.of(Trigger.BLOCK_PLACE), only.triggers());
     }
 
     @Test

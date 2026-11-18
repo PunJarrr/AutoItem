@@ -392,7 +392,7 @@ const tests = [
     slots: { 0: 'mushroom_stew 1', 15: 'mushroom_stew 1' },
     setup: getHungry,
     act: async () => { useItem(0); await sleep(2600) },
-    expect: { 0: ['mushroom_stew', 1], 15: null },
+    expect: { 0: ['mushroom_stew', 1], 15: ['bowl', 1] }, // the bowl takes the source's slot
     delta: { mushroom_stew: -1, bowl: 1 }
   },
   {
@@ -408,7 +408,7 @@ const tests = [
     expect: {
       0: ['potion[potion_contents={potion:"minecraft:swiftness"}]', 1],
       10: ['potion[potion_contents={potion:"minecraft:slowness"}]', 1],
-      14: null
+      14: ['glass_bottle', 1]
     },
     delta: { potion: -1, glass_bottle: 1 }
   },
@@ -419,7 +419,7 @@ const tests = [
     act: async () => {
       for (let i = 0; i < 3; i++) { useItem(0); await sleep(2900) }
     },
-    expect: { 0: ['honey_bottle', 2], 9: null },
+    expect: { 0: ['honey_bottle', 2], 9: ['glass_bottle', 1] }, // the last bottle takes the source's slot
     delta: { honey_bottle: -3, glass_bottle: 3 }
   },
   {
@@ -477,7 +477,7 @@ const tests = [
     name: 'last water bucket emptied: refilled, empty bucket moves out',
     slots: { 0: 'water_bucket 1', 12: 'water_bucket 1' },
     act: async () => { await useItemAt(TOP(2, 0)); await sleep(800) },
-    expect: { 0: ['water_bucket', 1], 12: null },
+    expect: { 0: ['water_bucket', 1], 12: ['bucket', 1] },
     delta: { water_bucket: -1, bucket: 1 }
   },
   {
@@ -486,7 +486,7 @@ const tests = [
     slots: { 0: 'bucket 1', 9: 'bucket 3' },
     setup: async () => { cmd('/setblock 2 99 0 water'); await sleep(300) },
     act: async () => { await useItemAt(new Vec3(2.5, 99.8, 0.5)); await sleep(800) },
-    expect: { 0: ['bucket', 3], 9: null },
+    expect: { 0: ['bucket', 3], 9: ['water_bucket', 1] },
     delta: { bucket: -1, water_bucket: 1 }
   },
   // ---- milestone 2: throwables ----
