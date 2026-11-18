@@ -58,6 +58,7 @@ public final class ConfigLoader {
                 "ignored-items", "remainders", "disabled-worlds",
                 "feedback", "feedback.sound", "feedback.sound.enabled", "feedback.sound.key",
                 "feedback.sound.volume", "feedback.sound.pitch", "feedback.action-bar",
+                "metrics",
                 "messages", "messages.prefix", "messages.refilled", "messages.toggled-on", "messages.toggled-off",
                 "messages.reloaded", "messages.reloaded-with-warnings", "messages.reload-failed",
                 "messages.no-permission", "messages.player-only", "messages.usage"));
@@ -111,7 +112,7 @@ public final class ConfigLoader {
             Map<String, String> remainders = readRemainders("remainders", defaults.remainders());
             Set<String> worlds = readStringSet("disabled-worlds");
             return new PluginConfig(version, enabled, triggers, hotbar, ignoredMaterials, ignoredTags, remainders,
-                    worlds, readFeedback(), readMessages());
+                    worlds, readFeedback(), readBool("metrics", defaults.metrics()), readMessages());
         }
 
         private PluginConfig.Feedback readFeedback() {

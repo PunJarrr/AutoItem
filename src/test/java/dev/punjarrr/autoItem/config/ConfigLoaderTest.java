@@ -53,6 +53,20 @@ class ConfigLoaderTest {
     }
 
     @Test
+    void metricsCanBeTurnedOff() {
+        ConfigLoader.LoadResult result = load("metrics: false");
+        assertEquals(List.of(), result.warnings());
+        assertEquals(false, result.config().metrics());
+    }
+
+    @Test
+    void invalidMetricsFallsBackToOn() {
+        ConfigLoader.LoadResult result = load("metrics: maybe");
+        assertOneWarning(result, "'metrics'");
+        assertEquals(true, result.config().metrics());
+    }
+
+    @Test
     void emptyConfigUsesDefaultsSilently() {
         ConfigLoader.LoadResult result = load("");
         assertEquals(List.of(), result.warnings());

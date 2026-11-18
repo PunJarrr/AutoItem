@@ -63,6 +63,12 @@ feedback:
   # Show messages.refilled on the action bar after a refill.
   action-bar: false
 
+# Send anonymous usage statistics to bStats (https://bstats.org/plugin/bukkit/AutoItem/35427):
+# server count, Minecraft version, server software, and which triggers are on.
+# Read at startup only; restart the server after changing it. To turn bStats off for
+# every plugin at once, set enabled: false in plugins/bStats/config.yml.
+metrics: true
+
 # Every message the plugin sends. MiniMessage format; <prefix> inserts the prefix.
 messages:
   prefix: "<gray>[<gold>AutoItem</gold>]</gray> "

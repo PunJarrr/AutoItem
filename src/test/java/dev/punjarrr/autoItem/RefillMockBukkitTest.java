@@ -41,7 +41,7 @@ class RefillMockBukkitTest {
     @BeforeEach
     void setUp() {
         server = MockBukkit.mock();
-        plugin = MockBukkit.load(AutoItem.class);
+        plugin = AutoItemForTests.load();
         player = server.addPlayer();
         player.setGameMode(GameMode.SURVIVAL);
         inventory = player.getInventory();

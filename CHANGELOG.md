@@ -7,6 +7,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ### Added
 
+- Anonymous usage statistics through bStats: server count, Minecraft version, server software, and which triggers are turned on. Turn it off with `metrics: false` in `config.yml` (restart needed), or for every plugin in `plugins/bStats/config.yml`.
 - Project setup: Gradle build, test servers (Paper 1.21.1, 1.21.11, 26.2 and Folia 26.2), design spec.
 - When you place your last block, or eat or drink your last item, the slot is refilled with an identical stack from your inventory (main inventory first, smallest stack first, then the hotbar). Works for the main hand and the offhand.
 - Stews, potions, honey bottles and milk leave their bowl, bottle or bucket in your inventory instead of in the refilled slot: it takes the place of the stack that was moved in, so it never drops and never lands in your hand.

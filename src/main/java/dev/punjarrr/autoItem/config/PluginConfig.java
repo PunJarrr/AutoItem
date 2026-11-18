@@ -15,10 +15,12 @@ import java.util.Set;
  * @param ignoredMaterials material keys listed in {@code ignored-items}
  * @param ignoredTags      tag keys listed in {@code ignored-items} (without the leading '#')
  * @param remainders       material key → material key or {@link Remainders#NONE}
+ * @param metrics          send anonymous bStats metrics; read once at startup
  */
 public record PluginConfig(int configVersion, boolean enabled, Set<Trigger> triggers, boolean hotbarSource,
                            Set<String> ignoredMaterials, Set<String> ignoredTags, Map<String, String> remainders,
-                           Set<String> disabledWorlds, Feedback feedback, Messages messages) {
+                           Set<String> disabledWorlds, Feedback feedback, boolean metrics,
+                           Messages messages) {
 
     public static final int CURRENT_CONFIG_VERSION = 1;
 
@@ -45,6 +47,7 @@ public record PluginConfig(int configVersion, boolean enabled, Set<Trigger> trig
         return new PluginConfig(CURRENT_CONFIG_VERSION, true, triggers, true, Set.of(), Set.of(),
                 defaultRemainders(), Set.of(),
                 new Feedback(true, "minecraft:entity.item.pickup", 0.3f, 1.4f, false),
+                true,
                 new Messages(
                         "<gray>[<gold>AutoItem</gold>]</gray> ",
                         "<gray>Refilled <white><item></white></gray>",

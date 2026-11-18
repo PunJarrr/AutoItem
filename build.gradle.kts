@@ -5,6 +5,8 @@ plugins {
     id("java-library")
     // run-paper 3.1.0 needs Gradle 9.7+ (see gradle/wrapper/gradle-wrapper.properties)
     id("xyz.jpenilla.run-paper") version "3.1.0"
+    // Bundles bStats into the plugin jar under our own package (see shadowJar below).
+    id("com.gradleup.shadow") version "9.6.1"
 }
 
 repositories {
@@ -17,6 +19,9 @@ dependencies {
     // load plugins built on older API; the reverse is not true. If something doesn't
     // compile here, it doesn't exist on 1.21 servers either.
     compileOnly("io.papermc.paper:paper-api:1.21-R0.1-SNAPSHOT")
+
+    // Anonymous usage metrics (bstats.org). Shaded and relocated into the jar; 3.1.0+ supports Folia.
+    implementation("org.bstats:bstats-bukkit:3.2.1")
 
     // Tests: pure planner/config tests plus MockBukkit integration tests.
     // MockBukkit is built against the paper-api version in its jar manifest (Paper-Version),
@@ -35,6 +40,24 @@ java {
 tasks {
     test {
         useJUnitPlatform()
+    }
+
+    jar {
+        // The plain jar lacks bStats; the shaded jar is the plugin.
+        archiveClassifier.set("plain")
+    }
+
+    shadowJar {
+        archiveClassifier.set("")
+        // bStats refuses to run unrelocated, and relocation keeps it from clashing with other plugins.
+        relocate("org.bstats", "dev.punjarrr.autoItem.libs.bstats")
+        dependencies {
+            include(dependency("org.bstats:.*"))
+        }
+    }
+
+    assemble {
+        dependsOn(shadowJar)
     }
 
     processResources {
@@ -84,7 +107,7 @@ val testServers = listOf(
     TestServer("runFolia26_3", "26.3", 25, "folia-26.3", folia = true),
 )
 
-val pluginJar = tasks.jar.flatMap { it.archiveFile }
+val pluginJar = tasks.shadowJar.flatMap { it.archiveFile }
 
 runPaper.folia.registerTask()
 

@@ -16,13 +16,14 @@ The overriding requirement is **no duplication and no loss**. A refill only ever
 - Per-player toggle, per-world disable list, ignored items, hotbar-as-source switch
 - Feedback: a quiet sound (on) and an action-bar message (off)
 - Paper and its forks, including **Folia**
+- Anonymous bStats metrics (§4.7), with a `metrics` switch
 
 ### Not in v1
 
 - Re-equipping broken armor or elytra (armor slots are never targets)
 - Refilling after dropping with Q, or after any inventory click
 - Pulling from shulker boxes, bundles, ender chests or containers
-- Spigot, GUI config, bStats, update checker
+- Spigot, GUI config, update checker
 
 ## 2. Platform and compatibility
 
@@ -32,7 +33,7 @@ The overriding requirement is **no duplication and no loss**. A refill only ever
 - Config strings are resolved with `Material.matchMaterial()` and item tags (`#minecraft:...` via `Bukkit.getTag(Tag.REGISTRY_ITEMS, …)`). Never `switch` on or `valueOf` Bukkit enums or registry types. An unknown name is a config warning and is skipped, so newer items work where they exist and nothing breaks where they don't.
 - Don't use the data component API (`use_remainder` etc.); it isn't in 1.21.
 - Sounds are played as Adventure `Sound`s built from a key string, so unknown keys on older versions play nothing instead of throwing.
-- Adventure and MiniMessage come with Paper; nothing is shaded. Tests add MockBukkit (test scope only).
+- Adventure and MiniMessage come with Paper. The only shaded library is `org.bstats:bstats-bukkit` (3.1.0+ is needed for Folia), relocated to `dev.punjarrr.autoItem.libs.bstats` by the Shadow plugin; the shaded jar is the plugin. Tests add MockBukkit (test scope only).
 
 ### Threading (Paper and Folia)
 
@@ -191,6 +192,17 @@ Checked at event time (to avoid recording) **and again at task time** (rule 1):
 
 On every successful refill (only when `RefillExecutor` really moved a stack): the configured sound (on by default, quiet), and the action-bar message (off by default). The sound is an Adventure sound built from `feedback.sound.key`, so a key an older version doesn't know plays nothing. `<item>` in the message is the item's custom name, or its name translated on the player's client.
 
+### 4.7 Metrics
+
+With `metrics: true` (default), AutoItem starts bStats (plugin ID 35427) once at startup. Changing `metrics` needs a restart; `/autoitem reload` doesn't start or stop it. Server owners can also turn bStats off for every plugin in `plugins/bStats/config.yml`. Besides bStats' standard data (server count, players, Minecraft version, server software, Java version), two custom charts are sent:
+
+| Chart ID | Type | Value |
+|---|---|---|
+| `enabled_triggers` | Advanced pie | One entry per enabled trigger, by its config key (`none` if all are off) |
+| `tool_break` | Simple pie | `on` or `off` |
+
+Chart callbacks run on the main thread on Paper and on bStats' own thread on Folia, so they only read the immutable config snapshot. Metrics never touch players or inventories. MockBukkit tests never start bStats.
+
 ## 5. Default `config.yml`
 
 ```yaml
@@ -259,6 +271,12 @@ feedback:
   # Show messages.refilled on the action bar after a refill.
   action-bar: false
 
+# Send anonymous usage statistics to bStats (https://bstats.org/plugin/bukkit/AutoItem/35427):
+# server count, Minecraft version, server software, and which triggers are on.
+# Read at startup only; restart the server after changing it. To turn bStats off for
+# every plugin at once, set enabled: false in plugins/bStats/config.yml.
+metrics: true
+
 # Every message the plugin sends. MiniMessage format; <prefix> inserts the prefix.
 messages:
   prefix: "<gray>[<gold>AutoItem</gold>]</gray> "
@@ -295,6 +313,7 @@ Package `dev.punjarrr.autoItem`. Pure logic is Bukkit-free and unit tested; conf
 | `listener.*Listener` | One per trigger group; observers only. |
 | `toggle.ToggleService` | `autoitem:enabled` PDC read/write. |
 | `feedback.FeedbackService` | Sound and action bar. |
+| `metrics.MetricsService` | Starts bStats and its custom charts (§4.7). |
 | `command.AutoItemCommand` | `toggle`, `reload`, tab completion. |
 
 ## 7. Milestones

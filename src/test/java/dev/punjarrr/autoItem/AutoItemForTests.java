@@ -1,5 +1,6 @@
 package dev.punjarrr.autoItem;
 
+import dev.punjarrr.autoItem.metrics.MetricsService;
 import org.bukkit.Bukkit;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.permissions.Permission;
@@ -38,6 +39,12 @@ public class AutoItemForTests extends AutoItem {
         } catch (IOException | InvalidDescriptionException e) {
             throw new AssertionError("can't read plugin.yml", e);
         }
+    }
+
+    /** Tests never start bStats (it would write plugins/bStats and contact bstats.org). */
+    @Override
+    protected MetricsService startMetrics() {
+        return null;
     }
 
     @Override

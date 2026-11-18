@@ -26,7 +26,7 @@ The developer is Pun (author `PunJarrr`). He runs a Paper server on Proxmox and 
 
 ## Stack and compatibility
 
-- Java 21, Gradle Kotlin DSL, `compileOnly paper-api 1.21`. Adventure and MiniMessage come with Paper, so shade nothing.
+- Java 21, Gradle Kotlin DSL, `compileOnly paper-api 1.21`. Adventure and MiniMessage come with Paper, so don't shade them. bStats is the only shaded library (relocated by the Shadow plugin); `build/libs/AutoItem-<version>.jar` is the shaded jar, the `-plain` jar lacks bStats.
 - Supports Minecraft 1.21 through 26.x on Paper and its forks, and **Folia** from 1.21.4 (`folia-supported: true`). Spigot/CraftBukkit is the next milestone (SPEC §7.5), not supported yet.
 - A compile error against the 1.21 API means that API doesn't exist on our oldest version. **Never bump paper-api to make something compile**; find a 1.21-safe way.
 - Tests run against the paper-api version MockBukkit is built for (1.21.11, see `build.gradle.kts`). Something that compiles in tests but not in `main` doesn't exist on 1.21.

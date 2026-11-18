@@ -16,6 +16,7 @@ import dev.punjarrr.autoItem.listener.DiscardListener;
 import dev.punjarrr.autoItem.listener.RightClickListener;
 import dev.punjarrr.autoItem.listener.ThrowableListener;
 import dev.punjarrr.autoItem.listener.ToolBreakListener;
+import dev.punjarrr.autoItem.metrics.MetricsService;
 import dev.punjarrr.autoItem.refill.CheckRecorder;
 import dev.punjarrr.autoItem.refill.RefillExecutor;
 import dev.punjarrr.autoItem.refill.RefillPlanner;
@@ -35,6 +36,7 @@ public class AutoItem extends JavaPlugin {
 
     private CheckRecorder recorder;
     private ConfigService configService;
+    private MetricsService metrics;
 
     @Override
     public void onEnable() {
@@ -65,10 +67,16 @@ public class AutoItem extends JavaPlugin {
                 "command 'autoitem' missing from plugin.yml");
         pluginCommand.setExecutor(command);
         pluginCommand.setTabCompleter(command);
+
+        metrics = startMetrics();
     }
 
     @Override
     public void onDisable() {
+        if (metrics != null) {
+            metrics.shutdown();
+            metrics = null;
+        }
         if (recorder != null) {
             recorder.clear();
         }
@@ -80,6 +88,11 @@ public class AutoItem extends JavaPlugin {
      */
     protected Predicate<ItemStack> equipsOnRightClick() {
         return RightClickListener::equipsOnRightClick;
+    }
+
+    /** Starts bStats when enabled in config. A hook so tests never contact bstats.org. */
+    protected MetricsService startMetrics() {
+        return MetricsService.startIfEnabled(this, configService);
     }
 
     /** For tests. */
