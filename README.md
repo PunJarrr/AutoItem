@@ -47,7 +47,7 @@ AutoItem uses [bStats](https://bstats.org/plugin/bukkit/AutoItem/35427) to colle
 ./gradlew build
 ```
 
-The plugin jar is `build/libs/AutoItem-<version>.jar`. Run a test server with `./gradlew runServer` (Paper 26.2); see `CLAUDE.md` for the other versions and the bot tests. The design and its anti-duplication invariants are in [docs/SPEC.md](docs/SPEC.md).
+The plugin jar is `build/libs/AutoItem-<version>.jar`. Run a test server with `./gradlew runServer` (Paper 26.3); see `CLAUDE.md` for the other versions and the bot tests. The design and its anti-duplication invariants are in [docs/SPEC.md](docs/SPEC.md).
 
 ## License
 

@@ -1,6 +1,6 @@
 ---
 name: test-server
-description: Smoke-test AutoItem on real servers (Paper 26.2, 1.21.11, 1.21.1 and Folia 26.2). It builds the jar, boots each server headless, checks the plugin enabled cleanly, and shuts the server down. Use after finishing a milestone, before a release, or when asked to test on a server.
+description: Smoke-test AutoItem on real servers (Paper 26.3, 1.21.11, 1.21.1 and Folia 26.3). It builds the jar, boots each server headless, checks the plugin enabled cleanly, and shuts the server down. Use after finishing a milestone, before a release, or when asked to test on a server.
 ---
 
 # Smoke-test on real servers
@@ -9,10 +9,10 @@ Versions to test: $ARGUMENTS (default: all four).
 
 | Server | Gradle task | Run dir |
 |---|---|---|
-| Paper 26.2 (Java 25) | `runServer` | `run/26.2` |
+| Paper 26.3 (Java 25) | `runServer` | `run/26.3` |
 | Paper 1.21.11 (newest 1.21.x) | `runServer1_21_11` | `run/1.21.11` |
 | Paper 1.21.1 (oldest supported) | `runServer1_21_1` | `run/1.21.1` |
-| Folia 26.2 (Java 25) | `runFolia` | `run/folia-26.2` |
+| Folia 26.3 (Java 25) | `runFolia` | `run/folia-26.3` |
 
 ## Steps
 
@@ -27,7 +27,7 @@ Versions to test: $ARGUMENTS (default: all four).
      pgrep -f '[j]ava.*com[.]mojang[.]eula[.]agree' >/dev/null && { echo "SIGTERM fallback" >&2; pkill -TERM -f '[j]ava.*com[.]mojang[.]eula[.]agree'; } ) | ./gradlew <task> --console=plain >> $log 2>&1
    ```
 
-   The `[j]ava` pattern keeps `pgrep`/`pkill` from matching the shell running this snippet (its own command line contains the pattern). Run this with a Bash timeout of 600000 ms, one server per call. The first run per server downloads the jar (and Java 25 for 26.2), so it's slower. If the log contains `SIGTERM fallback`, the clean `stop` failed: report it.
+   The `[j]ava` pattern keeps `pgrep`/`pkill` from matching the shell running this snippet (its own command line contains the pattern). Run this with a Bash timeout of 600000 ms, one server per call. The first run per server downloads the jar (and Java 25 for 26.x), so it's slower. If the log contains `SIGTERM fallback`, the clean `stop` failed: report it.
 4. Check `build/smoke/<name>.log` (the full server log is also at `<run dir>/logs/latest.log`):
    - `Enabling AutoItem` is present
    - `Done (` is present (startup finished)

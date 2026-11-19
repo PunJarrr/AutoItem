@@ -13,15 +13,15 @@ The developer is Pun (author `PunJarrr`). He runs a Paper server on Proxmox and 
 - `./gradlew test --tests '*RefillPlanner*'` — one class (the pure planner)
 - `./gradlew test --tests '*MockBukkit*'` — the MockBukkit integration tests only
 - Test servers. The first run downloads the server jar, and Java 25 for 26.x (Gradle toolchains handle this).
-  - `./gradlew runServer` → Paper 26.2 in `run/26.2`
+  - `./gradlew runServer` → Paper 26.3 in `run/26.3` (the newest, and the main server for in-game checks)
   - `./gradlew runServer1_21_11` → `run/1.21.11`
   - `./gradlew runServer1_21_1` → `run/1.21.1`
   - `./gradlew runServer1_21` → `run/1.21` (the oldest supported version; Folia starts at 1.21.4)
-  - `./gradlew runFolia` → Folia 26.2 in `run/folia-26.2`
-  - `./gradlew runServer26_3` / `runFolia26_3` → Paper / Folia 26.3 (newest; the bot can't join it yet)
+  - `./gradlew runFolia` → Folia 26.3 in `run/folia-26.3`
+  - `./gradlew runServer26_2` / `runFolia26_2` → Paper / Folia 26.2
   - `runServer26_1`, `runFolia26_1`, `runFolia1_21_11` → the other servers the bot plays on
   - These are interactive servers. For automated boot checks use the `/test-server` skill, and never leave a server running.
-- `tools/bot/run.sh <task> <run dir> <version>` — the SPEC §8 G/X tests with a Mineflayer bot as the player, e.g. `tools/bot/run.sh runServer1_21_1 run/1.21.1 1.21.1`. Works on Paper 1.21 (`runServer1_21`), 1.21.1, 1.21.11 and 26.1.2 (`runServer26_1`, version `26.1`) and Folia 1.21.11 and 26.1.2 (`runFolia1_21_11`, `runFolia26_1`); the bot can't join 26.2. It switches that run dir to offline mode and ops the bot. First time: `cd tools/bot && npm install --ignore-scripts`. Results go to `build/bot/<run dir>.jsonl`. Needs the Mac awake and on power: a sleeping machine freezes the server mid-test.
+- `tools/bot/run.sh <task> <run dir> <version>` — the SPEC §8 G/X tests with a Mineflayer bot as the player, e.g. `tools/bot/run.sh runServer1_21_1 run/1.21.1 1.21.1`. Works on Paper 1.21 (`runServer1_21`), 1.21.1, 1.21.11 and 26.1.2 (`runServer26_1`, version `26.1`) and Folia 1.21.11 and 26.1.2 (`runFolia1_21_11`, `runFolia26_1`); the bot can't join 26.2 or 26.3. It switches that run dir to offline mode and ops the bot. First time: `cd tools/bot && npm install --ignore-scripts`. Results go to `build/bot/<run dir>.jsonl`. Needs the Mac awake and on power: a sleeping machine freezes the server mid-test.
 - If `./gradlew` gives "permission denied", run `chmod +x gradlew`. If it can't find Java, set `JAVA_HOME` to a JDK 21.
 
 ## Stack and compatibility

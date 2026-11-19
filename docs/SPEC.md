@@ -332,7 +332,7 @@ Each ends with `./gradlew build` green, `/test-server` on all versions, a commit
 
 ## 8. Test matrix
 
-Automated coverage: the unit and MockBukkit tests below, plus `tools/bot` (a Mineflayer client playing on real servers: Paper 1.21.1, 1.21.11 and 26.1.2, Folia 1.21.11 and 26.1.2; the bot can't join 26.2). The G and X rows the bot runs are listed in `tools/bot/tests.js`; what still needs a person is in `docs/IN-GAME-TESTS.md`.
+Automated coverage: the unit and MockBukkit tests below, plus `tools/bot` (a Mineflayer client playing on real servers: Paper 1.21, 1.21.1, 1.21.11 and 26.1.2, Folia 1.21.11 and 26.1.2; the bot can't join 26.2 or 26.3). The G and X rows the bot runs are listed in `tools/bot/tests.js`; what still needs a person is in `docs/IN-GAME-TESTS.md`.
 
 ### Unit tests (pure, `RefillPlanner` / `Remainders` / `ConfigLoader`)
 
@@ -402,7 +402,7 @@ Automated coverage: the unit and MockBukkit tests below, plus `tools/bot` (a Min
 | G13 | Sound on by default; action bar after enabling it | As configured |
 | V1 | Boot on Paper 1.21, 1.21.1, 1.21.11, 26.1.2, 26.2, 26.3 and Folia 1.21.11, 26.1.2, 26.2, 26.3 | Enables, no errors or warnings |
 
-### Exploit cases (G-style, run on Paper 26.2 and Folia)
+### Exploit cases (G-style, run on Paper 26.3 and Folia)
 
 "Conserved" = per-material counts in inventory + cursor + nearby drops equal before and after.
 
