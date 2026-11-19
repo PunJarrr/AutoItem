@@ -1,6 +1,6 @@
 # In-game checks for Pun
 
-The bot (`tools/bot`) plays the full scenario list on Paper 1.21.1, 1.21.11 and 26.1.2 and Folia 1.21.11 and 26.1.2: placing, eating, potions, honey, buckets (empty, fill, cauldron), throwables, spawn eggs, bone meal, fireworks, end crystals, item frames, paintings, armor stands, boats, minecarts, leads, name tags, feeding, bottles, mooshrooms, bows, tipped arrows, crossbows, tool breaking (pickaxe, flint and steel, shears, fishing rod), toggle, disabled worlds, reload, sound, action bar, Q/F/click/scroll/totem cases, pick block, the armor-stand swap and full inventories.
+The bot (`tools/bot`) plays the full scenario list on Paper 1.21, 1.21.1, 1.21.11 and 26.1.2 and Folia 1.21.11 and 26.1.2: placing, eating, potions, honey, buckets (empty, fill, cauldron), throwables, spawn eggs, bone meal, fireworks, end crystals, item frames, paintings, armor stands, boats, minecarts, leads, name tags, feeding, bottles, mooshrooms, bows, tipped arrows, crossbows, tool breaking (pickaxe, flint and steel, shears, fishing rod), toggle, disabled worlds, reload, sound, action bar, Q/F/click/scroll/totem cases, pick block, the armor-stand swap and full inventories.
 
 So this list is only what the bot can't do: **Paper 26.2** (the bot can't join it), and a few things a bot can't easily reproduce. Test IDs refer to docs/SPEC.md §8.
 
@@ -41,3 +41,4 @@ Everything here passed on 26.1.2 with the bot; this just confirms 26.2.
 - [ ] **X11:** only if your server runs Multiverse-Inventories or PerWorldInventory: use the last item and go through a portal at once. Nothing moves in either world's inventory.
 - [ ] **Folia 26.2:** `./gradlew runFolia`, then G1, G5 and G8 from section 1.
 - [ ] **Paper 26.3** (`./gradlew runServer26_3`) and **Folia 26.3** (`./gradlew runFolia26_3`): G1, G3, G5, G8 and G9 from section 1, with a 26.3 client.
+- [ ] **bStats:** after starting any test server, `plugins/bStats/config.yml` exists. With `metrics: false` in AutoItem's `config.yml` and a restart, the server still starts without errors. Real data only shows up on https://bstats.org/plugin/bukkit/AutoItem/35427 once the released plugin runs on servers (the first upload is about 30 minutes after a server starts). Add the `enabled_triggers` (Advanced Pie) and `tool_break` (Simple Pie) charts on that page so the custom data is displayed.
