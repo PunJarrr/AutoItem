@@ -1,0 +1,1 @@
+gamerule minecraft:keep_inventory true

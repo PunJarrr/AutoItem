@@ -36,9 +36,8 @@ Everything here passed on 26.1.2 with the bot; this confirms 26.3, the version m
 - [ ] **Carrot on a stick** used up while riding a pig: no refill (it turns into a fishing rod).
 - [ ] **Recipe book:** last item in hand, click a recipe in the inventory's recipe book that uses it: no refill.
 - [ ] **Villager trade:** last emerald in hand, open a villager and pick an emerald trade at once: no refill (normally impossible to see; the trade pulls all your emeralds).
-- [ ] **Pick block on 26.3** (middle-click a block you also have in your inventory) right after right-clicking with your last item: no refill.
-- [ ] **X5:** eat the last stew with a spare in the inventory and, in the same moment, click the bowl onto your cursor (inventory open): no refill, the bowl is on the cursor.
-- [ ] **X6:** use the last block and die at the same moment, with `/gamerule doImmediateRespawn true` and false, `keepInventory` on and off: no refill after respawn.
+- [ ] **Pick block on 26.3:** a full hotbar, your last cobblestone in slot 1, stone in the inventory. Place the cobblestone, then middle-click a stone block as fast as you can: the stone moves into your hand. Whether AutoItem refilled first or not, nothing may be lost or duplicated (still 64 cobblestone, 1 stone, 8 dirt). The exact same-tick case is covered by the bot on 1.21–26.1.2.
+- [ ] **X6:** with keepInventory on, place your last cobblestone right before you die (the data pack kills you 5 seconds after setup). After respawning you still have exactly 64. Dying in the exact same tick is luck by hand; that case is covered by the MockBukkit test `x6_deathBeforeTheTaskAborts`.
 - [ ] **X11:** only if your server runs Multiverse-Inventories or PerWorldInventory: use the last item and go through a portal at once. Nothing moves in either world's inventory.
 - [ ] **Folia 26.3:** `./gradlew runFolia`, then G1, G5 and G8 from section 1.
 - [ ] **Paper 26.2** (`./gradlew runServer26_2`) and **Folia 26.2** (`./gradlew runFolia26_2`): G1, G3, G5, G8 and G9 from section 1, with a 26.2 client.

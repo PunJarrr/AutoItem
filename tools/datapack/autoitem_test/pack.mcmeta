@@ -19,6 +19,15 @@
         ],
         "min_format": 71,
         "max_format": 121
+      },
+      {
+        "directory": "new_gamerules",
+        "formats": [
+          94,
+          121
+        ],
+        "min_format": 94,
+        "max_format": 121
       }
     ]
   }

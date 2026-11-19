@@ -5,6 +5,8 @@ if root.exists(): shutil.rmtree(root)
 NS = "autoitem_test"
 fn = root / "data" / NS / "function"
 new_fn = root / "new_text" / "data" / NS / "function"
+# 1.21.11 renamed game rules (keepInventory -> keep_inventory)
+new_rules_fn = root / "new_gamerules" / "data" / NS / "function"
 
 def w(path, lines):
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -13,7 +15,9 @@ def w(path, lines):
 def say(text, color="gray"):
     return 'tellraw @s ' + json.dumps({"text": text, "color": color})
 
-# id, title, setup lines, instructions, checks (list of (cond, slot, item)) where cond is "if"/"unless"; item "*" for any
+# id, title, setup lines, instructions, checks: a list of
+#   ("if"/"unless", slot, item)  the slot holds (or doesn't hold) the item; "*" = anything
+#   ("count", item, n)           the 36 storage slots hold exactly n of the item in total
 T = []
 def t(id, title, setup, how, checks=None):
     T.append((id, title, setup, how, checks))
@@ -26,8 +30,8 @@ t("g1", "G1 place last block", [
 t("g3", "G3 last stew", [
     "item replace entity @s hotbar.0 with minecraft:mushroom_stew 1",
     "item replace entity @s inventory.0 with minecraft:mushroom_stew 1",
-    "effect give @s minecraft:hunger 3 255 true"],
-  "Wait until you're hungry, then eat the stew.",
+    "effect give @s minecraft:hunger 5 255 true"],
+  "Wait about 5 seconds until your food bar drops, then eat the stew.",
   [("if", "hotbar.0", "minecraft:mushroom_stew"), ("if", "inventory.0", "minecraft:bowl")])
 t("g5", "G5 last water bucket", [
     "item replace entity @s hotbar.0 with minecraft:water_bucket 1",
@@ -118,7 +122,7 @@ t("trade", "Villager trade with last emerald: no refill", [
     "item replace entity @s inventory.0 with minecraft:emerald 10",
     'summon minecraft:villager ^ ^ ^2 {NoAI:1b,VillagerData:{profession:"minecraft:farmer",level:2,type:"minecraft:plains"},Offers:{Recipes:[{buy:{id:"minecraft:emerald",count:1},sell:{id:"minecraft:bread",count:1},maxUses:999}]}}'],
   "Open the villager and pick the emerald trade at once.")
-t("pickblock", "Pick block right after last item: no refill", [
+t("pickblock", "Pick block right after last item: nothing lost or duplicated", [
     "item replace entity @s hotbar.0 with minecraft:cobblestone 1",
     "item replace entity @s inventory.0 with minecraft:cobblestone 64",
     "item replace entity @s hotbar.1 with minecraft:dirt 1",
@@ -131,16 +135,16 @@ t("pickblock", "Pick block right after last item: no refill", [
     "item replace entity @s hotbar.8 with minecraft:dirt 1",
     "item replace entity @s inventory.1 with minecraft:stone 1",
     "setblock ^ ^ ^2 minecraft:stone"],
-  "Place the cobblestone and, in the same moment, middle-click the stone in front of you.")
-t("x5", "X5 stew bowl onto cursor: no refill", [
-    "item replace entity @s hotbar.0 with minecraft:mushroom_stew 1",
-    "item replace entity @s inventory.0 with minecraft:mushroom_stew 1",
-    "effect give @s minecraft:hunger 3 255 true"],
-  "Open your inventory and, when hungry, eat the stew; in the same moment click the bowl onto your cursor. Expected: no refill, the bowl stays on the cursor.")
-t("x6", "X6 die right after last block", [
+  "Place the cobblestone, then as fast as you can middle-click the stone block in front of you. The stone moves into your hand. Whether AutoItem refilled first or not, nothing may be lost or duplicated.",
+  [("count", "minecraft:cobblestone", 64), ("count", "minecraft:stone", 1), ("count", "minecraft:dirt", 8)])
+t("x6", "X6 die right after the last block", [
     "item replace entity @s hotbar.0 with minecraft:cobblestone 1",
-    "item replace entity @s inventory.0 with minecraft:cobblestone 64"],
-  "Place the cobblestone and die at the same moment (e.g. stand in lava, or have someone run /kill). Try with doImmediateRespawn and keepInventory on and off.")
+    "item replace entity @s inventory.0 with minecraft:cobblestone 64",
+    "function autoitem_test:_keep_inventory",
+    "tag @s add autoitem_x6",
+    "schedule function autoitem_test:_x6_kill 100t"],
+  "keepInventory is now on. You die in 5 seconds: place the cobblestone right before that. Respawn, then check that you still have all 64.",
+  [("count", "minecraft:cobblestone", 64)])
 
 for id, title, setup, how, checks in T:
     lines = ["# " + title, "function autoitem_test:_reset"] + setup + [
@@ -151,11 +155,26 @@ for id, title, setup, how, checks in T:
     if checks:
         c = ["# Check for " + title, "scoreboard objectives add autoitem_test dummy",
              "scoreboard players set #ok autoitem_test 1"]
-        for cond, slot, item in checks:
-            neg = "unless" if cond == "if" else "if"
-            c.append(f"execute {neg} items entity @s {slot} {item} run scoreboard players set #ok autoitem_test 0")
+        detail = []
+        for i, (kind, a, b) in enumerate(checks):
+            if kind == "count":
+                holder = f"#n{i}"
+                c.append(f"execute store result score {holder} autoitem_test if items entity @s container.* {a}")
+                c.append(f"execute unless score {holder} autoitem_test matches {b} run scoreboard players set #ok autoitem_test 0")
+                detail.append(["", {"text": f"  {a.split(':')[1]}: ", "color": "gray"},
+                               {"score": {"name": holder, "objective": "autoitem_test"}, "color": "white"},
+                               {"text": f" (expected {b})", "color": "gray"}])
+            else:
+                neg = "unless" if kind == "if" else "if"
+                c.append(f"execute {neg} items entity @s {a} {b} run scoreboard players set #ok autoitem_test 0")
+                if a.startswith(("hotbar.", "inventory.")):
+                    n = int(a.split(".")[1]) + (9 if a.startswith("inventory.") else 0)
+                    detail.append(["", {"text": f"  {a}: ", "color": "gray"},
+                                   {"nbt": f"Inventory[{{Slot:{n}b}}]", "entity": "@s", "color": "white"}])
         c.append("execute if score #ok autoitem_test matches 1 run " + say("PASS: " + title, "green"))
-        c.append("execute if score #ok autoitem_test matches 0 run " + say("FAIL: " + title + " (look at the slots and tell Claude)", "red"))
+        c.append("execute if score #ok autoitem_test matches 0 run " + say("FAIL: " + title + " (tell Claude what's in the slots)", "red"))
+        for d in detail:
+            c.append("execute if score #ok autoitem_test matches 0 run tellraw @s " + json.dumps(d))
         w(fn / "check" / (id + ".mcfunction"), c)
 
 w(fn / "_reset.mcfunction", [
@@ -164,7 +183,6 @@ w(fn / "_reset.mcfunction", [
     "gamemode survival @s",
     "effect clear @s",
     "kill @e[type=!minecraft:player,distance=..16]",
-    "effect give @s minecraft:saturation 1 20 true",
     "effect give @s minecraft:resistance 3 4 true"])
 
 def menu_line(id, title, checks, new):
@@ -185,6 +203,10 @@ def hint(new):
     return ["$tellraw @s " + json.dumps(["", {"text": "Then run /function autoitem_test:check/$(id) or click ", "color": "gray"},
                                           {"text": "[check]", "color": "green", ce: action}])]
 
+w(fn / "_x6_kill.mcfunction", ["kill @a[tag=autoitem_x6]", "tag @a remove autoitem_x6"])
+w(fn / "_keep_inventory.mcfunction", ["gamerule keepInventory true"])
+w(new_rules_fn / "_keep_inventory.mcfunction", ["gamerule minecraft:keep_inventory true"])
+
 for new, base in ((False, fn), (True, new_fn)):
     m = ["# Lists every test with clickable setup and check buttons",
          say("AutoItem in-game tests: click [setup], do the action, click [check].", "gold")]
@@ -196,6 +218,8 @@ for new, base in ((False, fn), (True, new_fn)):
 (root / "pack.mcmeta").write_text(json.dumps({
     "pack": {"description": "AutoItem in-game test setups: /function autoitem_test:menu",
              "pack_format": 48, "supported_formats": [48, 121], "min_format": 48, "max_format": 121},
-    "overlays": {"entries": [{"directory": "new_text", "formats": [71, 121], "min_format": 71, "max_format": 121}]}
+    "overlays": {"entries": [
+        {"directory": "new_text", "formats": [71, 121], "min_format": 71, "max_format": 121},
+        {"directory": "new_gamerules", "formats": [94, 121], "min_format": 94, "max_format": 121}]}
 }, indent=2) + "\n")
 print(len(T), "tests")
