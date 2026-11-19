@@ -1,0 +1,25 @@
+{
+  "pack": {
+    "description": "AutoItem in-game test setups: /function autoitem_test:menu",
+    "pack_format": 48,
+    "supported_formats": [
+      48,
+      121
+    ],
+    "min_format": 48,
+    "max_format": 121
+  },
+  "overlays": {
+    "entries": [
+      {
+        "directory": "new_text",
+        "formats": [
+          71,
+          121
+        ],
+        "min_format": 71,
+        "max_format": 121
+      }
+    ]
+  }
+}

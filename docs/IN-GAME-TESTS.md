@@ -8,8 +8,9 @@ So this list is only what the bot can't do: **Paper 26.3 and 26.2** (the bot can
 
 1. `./gradlew runServer` starts Paper 26.3 in `run/26.3`. Join `localhost` with a 26.3 client.
 2. In the server console: `op <your name>`, then in-game `/gamemode survival`.
-3. `/clear` before each test. Put items in exact slots with `/item replace entity @s hotbar.0 with <item> <count>` (`hotbar.0`–`hotbar.8`, `inventory.0`–`inventory.26`, `weapon.offhand`).
-4. "Refilled" means the hand gets the spare stack; a bowl, bottle or bucket left over takes the spare's old slot.
+3. **Shortcut: the test data pack.** Every Paper test server gets it automatically (`tools/datapack`). Run `/function autoitem_test:menu` and click **[setup]** next to a test: it clears your inventory, puts the items in the right slots and summons any mob or block the test needs. Do the action, then click **[check]** for PASS or FAIL. Tests without a [check] need your eyes. Not available on Folia (it disables `/item` and `/execute`); use the manual commands below there.
+4. Manual setup: `/clear` before each test. Put items in exact slots with `/item replace entity @s hotbar.0 with <item> <count>` (`hotbar.0`–`hotbar.8`, `inventory.0`–`inventory.26`, `weapon.offhand`).
+5. "Refilled" means the hand gets the spare stack; a bowl, bottle or bucket left over takes the spare's old slot.
 
 ## 1. Quick pass on Paper 26.3
 

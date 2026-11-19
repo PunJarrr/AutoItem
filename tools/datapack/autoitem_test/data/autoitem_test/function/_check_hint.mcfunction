@@ -1,0 +1,1 @@
+$tellraw @s ["", {"text": "Then run /function autoitem_test:check/$(id) or click ", "color": "gray"}, {"text": "[check]", "color": "green", "clickEvent": {"action": "run_command", "value": "/function autoitem_test:check/$(id)"}}]

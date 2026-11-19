@@ -117,7 +117,17 @@ testServers.forEach { server ->
         languageVersion = JavaLanguageVersion.of(server.javaVersion)
     }
 
+    // The in-game test data pack (tools/datapack) goes into each Paper server's world:
+    // /function autoitem_test:menu. Not on Folia: it disables /item and /execute, which the pack needs.
+    val installDatapack = if (server.folia) null else tasks.register<Sync>("${server.taskName}Datapack") {
+        group = "run paper"
+        description = "Installs the AutoItem test data pack into ${server.dir}."
+        from(layout.projectDirectory.dir("tools/datapack/autoitem_test"))
+        into(serverDir.dir("world/datapacks/autoitem_test"))
+    }
+
     val configureServer: RunServer.() -> Unit = {
+        installDatapack?.let { dependsOn(it) }
         minecraftVersion(server.minecraftVersion)
         runDirectory.set(serverDir)
         javaLauncher.set(serverJava)

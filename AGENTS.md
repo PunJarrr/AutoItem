@@ -22,6 +22,7 @@ The developer is Pun (author `PunJarrr`). He runs a Paper server on Proxmox and 
   - `runServer26_1`, `runFolia26_1`, `runFolia1_21_11` → the other servers the bot plays on
   - These are interactive servers. For automated boot checks use the `/test-server` skill, and never leave a server running.
 - `tools/bot/run.sh <task> <run dir> <version>` — the SPEC §8 G/X tests with a Mineflayer bot as the player, e.g. `tools/bot/run.sh runServer1_21_1 run/1.21.1 1.21.1`. Works on Paper 1.21 (`runServer1_21`), 1.21.1, 1.21.11 and 26.1.2 (`runServer26_1`, version `26.1`) and Folia 1.21.11 and 26.1.2 (`runFolia1_21_11`, `runFolia26_1`); the bot can't join 26.2 or 26.3. It switches that run dir to offline mode and ops the bot. First time: `cd tools/bot && npm install --ignore-scripts`. Results go to `build/bot/<run dir>.jsonl`. Needs the Mac awake and on power: a sleeping machine freezes the server mid-test.
+- `tools/datapack/autoitem_test` — an in-game test data pack, installed into every Paper test server's world when it starts: `/function autoitem_test:menu` gives clickable setup and PASS/FAIL check buttons for the docs/IN-GAME-TESTS.md cases. Edit the tests in `tools/datapack/generate.py` and rerun it (`python3 tools/datapack/generate.py`).
 - If `./gradlew` gives "permission denied", run `chmod +x gradlew`. If it can't find Java, set `JAVA_HOME` to a JDK 21.
 
 ## Stack and compatibility
